@@ -1,3 +1,6 @@
+.venv/
+venv/
+
 # Mac
 .DS_Store
 
@@ -9,3 +12,7 @@
 
 # Logs
 *.log
+
+# Python cahce
+__pyache__/
+*.pyc
