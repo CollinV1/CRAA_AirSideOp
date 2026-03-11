@@ -1,5 +1,7 @@
 # CRAA-Airside Operations
 
+Flight scheduler and scenario builder.
+
 ### Supabase CLI
 
 Version control for Supabase db.
