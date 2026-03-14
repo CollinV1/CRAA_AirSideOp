@@ -1,0 +1,50 @@
+COPY raw_flights_stage (
+    Carrier,
+    FlightNumber,
+    ServiceType,
+    EffectiveDate,
+    DiscontinuedDate,
+    DOW,
+    Departure Airport, 
+    DepartureTime, 
+    ArrivalAirport, 
+    ArrivalTime, 
+    SubAircraftTypeCode, 
+    )
+-- supabase runs inside docker container, doesn't understand relative filepath
+FROM '/docker-entrypoint-initdb.d/seeds/s01FEB2431JAN25.csv'
+WITH (FORMAT csv, HEADER true);
+
+COPY raw_flights_stage (
+    Carrier,
+    FlightNumber,
+    ServiceType,
+    EffectiveDate,
+    DiscontinuedDate,
+    DOW,
+    Departure Airport, 
+    DepartureTime, 
+    ArrivalAirport, 
+    ArrivalTime, 
+    SubAircraftTypeCode, 
+    )
+-- supabase runs inside docker container, doesn't understand relative filepath
+FROM '/docker-entrypoint-initdb.d/seeds/s01JAN23_31DEC23.csv'
+WITH (FORMAT csv, HEADER true);
+
+COPY raw_flights_stage (
+    Carrier,
+    FlightNumber,
+    ServiceType,
+    EffectiveDate,
+    DiscontinuedDate,
+    DOW,
+    Departure Airport, 
+    DepartureTime, 
+    ArrivalAirport, 
+    ArrivalTime, 
+    SubAircraftTypeCode, 
+    )
+-- supabase runs inside docker container, doesn't understand relative filepath
+FROM '/docker-entrypoint-initdb.d/seeds/s01JAN2431DEC24.csv'
+WITH (FORMAT csv, HEADER true);
