@@ -65,7 +65,7 @@ CREATE TABLE public.raw_flights (
   EffectiveDate text NOT NULL,
   DiscontinuedDate text NOT NULL,
   DOW text NOT NULL,
-  Departure Airport text NOT NULL,
+  DepartureAirport text NOT NULL,
   DepartureTime bigint NOT NULL,
   ArrivalAirport text NOT NULL,
   ArrivalTime bigint NOT NULL,
