@@ -28,7 +28,6 @@ COPY raw_flights_stage (
     ArrivalTime, 
     SubAircraftTypeCode, 
     )
--- supabase runs inside docker container, doesn't understand relative filepath
 FROM '/docker-entrypoint-initdb.d/seeds/s01JAN23_31DEC23.csv'
 WITH (FORMAT csv, HEADER true);
 
@@ -45,6 +44,5 @@ COPY raw_flights_stage (
     ArrivalTime, 
     SubAircraftTypeCode, 
     )
--- supabase runs inside docker container, doesn't understand relative filepath
 FROM '/docker-entrypoint-initdb.d/seeds/s01JAN2431DEC24.csv'
 WITH (FORMAT csv, HEADER true);
