@@ -1,8 +1,8 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-'''
-adds plane mappings and changes raw_recurring_schedule --> raw_flights
+
+-- adds plane mappings and changes raw_recurring_schedule --> raw_flights
 '''
 
 CREATE TABLE public.airlines (
