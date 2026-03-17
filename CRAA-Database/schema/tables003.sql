@@ -1,10 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-'''
-adds plane mappings and changes raw_recurring_schedule --> raw_flights
-'''
-
 CREATE TABLE public.airlines (
   id text NOT NULL,
   avg_buffer integer,
@@ -65,7 +61,7 @@ CREATE TABLE public.raw_flights (
   EffectiveDate text NOT NULL,
   DiscontinuedDate text NOT NULL,
   DOW text NOT NULL,
-  DepartureAirport text NOT NULL,
+  Departure Airport text NOT NULL,
   DepartureTime bigint NOT NULL,
   ArrivalAirport text NOT NULL,
   ArrivalTime bigint NOT NULL,
