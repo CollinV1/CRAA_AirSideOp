@@ -8,6 +8,7 @@ app = FastAPI()
 
 # defines root directory function
 def root():
+    # FastAPI auto converts to JSON for us
     return {"Hello": "World"}
 
 # routes define urls that app responds to 

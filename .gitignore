@@ -16,3 +16,6 @@ venv/
 # Python cahce
 __pyache__/
 *.pyc
+
+# Test/Scrap Scripts 
+./testFastAPI

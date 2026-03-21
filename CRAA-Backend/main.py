@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+import ssl 
 
 from db import get_db
 app = FastAPI()
@@ -13,7 +14,7 @@ origins = [
 
 @app.get("/flights")
 async def get_flights(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(text("SELECT"))
+    result = await db.execute(text("SELECT plane_mapping_id FROM plane_mappings LIMIT 10"))
     flights = result.mappings().all()
     
     return {"flights": flights}
@@ -29,4 +30,4 @@ app.add_middleware(
 
 @app.get("/hello")
 def read_root():
-    return {"message": "Hello from FastAPI 🚀"}
+    return {"message": "Hello from FastAPI"}
