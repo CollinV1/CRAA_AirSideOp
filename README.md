@@ -13,7 +13,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO your_user_name;
 ```
 Create a **.env** file in the root directory (include **.env** in **.gitignore**) containing...
 ```
-DATABASE_URL=postgresql+asyncpg://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres?sslmode=require
+DATABASE_URL=postgresql+asyncpg://[USER_ROLE].[PROJECT_ID]:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:6543/postgres
 ```
 `PROJECT_ID` can be found in Supabase Connection String.
 
