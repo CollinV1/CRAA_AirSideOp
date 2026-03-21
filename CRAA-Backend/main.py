@@ -14,8 +14,8 @@ origins = [
 @app.get("/flights")
 async def get_flights(db: AsyncSession = Depends(get_db)):
     result = await db.execute(text("SELECT"))
-    
     flights = result.mappings().all()
+    
     return {"flights": flights}
 
 app.add_middleware(
