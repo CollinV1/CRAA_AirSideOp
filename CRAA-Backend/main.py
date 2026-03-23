@@ -14,7 +14,7 @@ origins = [
 
 @app.get("/flights")
 async def get_flights(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(text("SELECT plane_mapping_id FROM plane_mappings LIMIT 10"))
+    result = await db.execute(text("SELECT flight_id FROM flight_instances LIMIT 10"))
     flights = result.mappings().all()
     
     return {"flights": flights}
