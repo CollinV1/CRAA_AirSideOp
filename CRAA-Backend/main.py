@@ -2,9 +2,12 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from supabase import Client
+from db import get_supabase
+
 import ssl 
 
-from db import get_db
+
 app = FastAPI()
 
 # Allow React dev server
@@ -13,11 +16,19 @@ origins = [
 ]
 
 @app.get("/flights")
-async def get_flights(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(text("SELECT flight_id FROM flight_instances LIMIT 10"))
-    flights = result.mappings().all()
+def get_flights(supabase: Client = Depends(get_supabase)):
+    res = supabase.table("flight_instances").select("*").execute()
+    return res.data
+
+
+# @app.get("/flights")
+# async def get_flights(db: AsyncSession = Depends(get_db)):
+#     a = 10
+#     testing = "SELECT flight_id FROM flight_instances LIMIT " + str(a)
+#     result = await db.execute(text(testing))
+#     flights = result.mappings().all()
     
-    return {"flights": flights}
+#     return {"flights": flights}
 
 app.add_middleware(
 
