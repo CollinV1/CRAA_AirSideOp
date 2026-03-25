@@ -1,0 +1,94 @@
+
+CREATE TEMP TABLE flight_instances_jan2025 AS
+SELECT *
+FROM flight_instances
+WHERE departure_datetime >= '2025-01-01'
+  AND departure_datetime < '2025-02-01'
+  AND departure_airport = 'CHS'
+ORDER BY subaircrafttypecode, departure_datetime;
+
+--assign plane id
+ALTER TABLE flight_instances_chs_jan2025 ADD COLUMN plane_id INT;
+
+DO $$
+DECLARE
+    r RECORD;
+    plane_counter INT := 0;
+    last_plane_arrival_times JSONB := '{}'::JSONB; -- key: plane_id, value: last arrival
+    assigned_plane_id INT;
+    plane_id INT;
+    turnaround_min INTERVAL := '45 minutes';
+    max_idle INTERVAL := '4 hours';  -- planes “leave” after this if no next departure
+BEGIN
+    FOR r IN SELECT * FROM flight_instances_chs_jan2025 ORDER BY subaircrafttypecode, departure_datetime LOOP
+        assigned_plane_id := NULL;
+
+        -- Search for planes of same subaircrafttype at CHS
+        FOR plane_id IN 1..plane_counter LOOP
+            IF last_plane_arrival_times ? plane_id::text THEN
+                IF r.departure_datetime >= (last_plane_arrival_times ->> plane_id::text)::timestamp + turnaround_min
+                   AND r.departure_datetime <= (last_plane_arrival_times ->> plane_id::text)::timestamp + max_idle THEN
+                    assigned_plane_id := plane_id;
+                    EXIT;
+                END IF;
+            END IF;
+        END LOOP;
+
+        -- If no available plane, assign a new one
+        IF assigned_plane_id IS NULL THEN
+            plane_counter := plane_counter + 1;
+            assigned_plane_id := plane_counter;
+        END IF;
+
+        -- Update flight record
+        UPDATE flight_instances_chs_jan2025
+        SET plane_id = assigned_plane_id
+        WHERE id = r.id;
+
+        -- Update last arrival for this plane
+        last_plane_arrival_times := last_plane_arrival_times || jsonb_build_object(assigned_plane_id::text, r.arrival_datetime);
+    END LOOP;
+END$$;
+
+--adds next departure and has_departure
+
+ALTER TABLE flight_instances_chs_jan2025
+ADD COLUMN next_departure_id INT,
+ADD COLUMN has_departure BOOLEAN DEFAULT FALSE;
+
+-- Update flights that have a feasible next departure
+WITH next_dep AS (
+    SELECT a.id AS arrival_id,
+           MIN(d.id) AS departure_id
+    FROM flight_instances_chs_jan2025 a
+    JOIN flight_instances_chs_jan2025 d
+      ON a.subaircrafttypecode = d.subaircrafttypecode
+     AND d.departure_datetime >= a.arrival_datetime + INTERVAL '45 minutes'
+     AND d.departure_datetime <= a.arrival_datetime + INTERVAL '4 hours'
+    GROUP BY a.id
+)
+UPDATE flight_instances_chs_jan2025 a
+SET next_departure_id = n.departure_id,
+    has_departure = TRUE
+FROM next_dep n
+WHERE a.id = n.arrival_id;
+
+
+-- generate flight_connections table 
+
+CREATE TABLE flight_connections_jan2025 AS
+SELECT
+    a.id AS arrival_id,
+    a.flight_number AS arrival_flight_number,
+    a.arrival_datetime,
+    a.subaircrafttypecode,
+    a.plane_id,
+    a.next_departure_id,
+    CASE WHEN a.next_departure_id IS NOT NULL THEN TRUE ELSE FALSE END AS has_departure,
+    d.flight_number AS departure_flight_number,
+    d.departure_datetime AS departure_datetime,
+    EXTRACT(EPOCH FROM (d.departure_datetime - a.arrival_datetime))/60 AS turnaround_minutes
+FROM flight_instances_chs_jan2025 a
+LEFT JOIN flight_instances_chs_jan2025 d
+  ON a.next_departure_id = d.id
+ORDER BY a.arrival_datetime;
