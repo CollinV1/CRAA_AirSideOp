@@ -5,18 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Airport SVG Mapping</title>
   <style>
+  .view {
+  display: none;
+}
+
+.view.active {
+  display: block;
+}
+
+.dashboard {
+  max-width: 1600px;
+  margin: 0 auto;
+  background: white;
+  border: 1px solid #ccc;
+}
+  .Header{
+  max-width: 1900px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #1B365D;
+
+}
+  .nav-btn {
+  border: 1px solid #2E5C8A;  border-radius: 12px;
+  padding: 15px 50px;
+  font-family: "Segoe UI", "Inter", sans-serif;
+  font-size: 20px;
+  font-style: italic;
+  font-weight: 600;
+  cursor: pointer;
+
+  background: #1B365D;
+  color: white;
+  transition: all 0.2s ease;
+}
+  .nav-btn.active {
+    background: #2E5C8A;
+    color: #ffffff;
+  }
+  .nav-btn:hover {
+    background: #2E5C8A;
+  }
     body {
       margin: 0;
-      padding: 20px;
+      padding: 0px;
       background: #f2f2f2;
       font-family: Arial, sans-serif;
     }
 
-    .map-wrapper {
+  .map-wrapper {
       position: relative;
-      width: 1200px;   /* change if needed */
+      width: 100%;
+      max-width: 1600px; /* match image width */
       margin: 0 auto;
-      border: 1px solid #ccc;
+      border: none;
       background: white;
     }
 
@@ -33,134 +75,292 @@
       width: 100%;
       height: 100%;
     }
+  
+.upload-card {
+  max-width: 760px;
+  margin: 30px auto;
+  padding: 28px;
+  background: #223554;
+  border-radius: 20px;
+}
+
+.csv-drop-zone {
+  border: 2px dashed rgba(160, 180, 220, 0.6);
+  border-radius: 18px;
+  padding: 36px 24px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.csv-drop-zone:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.csv-drop-zone.dragover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #9fc2ff;
+  transform: scale(1.01);
+}
+
+.upload-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: left;
+}
+
+.upload-icon {
+  font-size: 42px;
+  color: #9fb3d9;
+  line-height: 1;
+}
+
+.upload-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+
+.upload-subtitle {
+  margin-top: 6px;
+  font-size: 15px;
+  color: #a9bad9;
+}
 
     .region {
       fill: rgba(255, 255, 255, 0.35);
-      stroke: black;
+      stroke: none;
       stroke-width: 2;
       cursor: pointer;
       transition: fill 0.2s ease;
+      transform-box: fill-box;
+      transform-origin: center;
     }
 
     .region:hover {
       fill: rgba(100, 150, 255, 0.4);
     }
 
-    .label {
-      font-size: 22px;
-      font-weight: bold;
-      fill: black;
-      text-anchor: middle;
-      dominant-baseline: middle;
-      pointer-events: none;
-    }
   </style>
 </head>
 <body>
+<div class="Header">
+  <button id="mapBtn" class="nav-btn active">✈︎ Gate View</button>
+  <button id="dashboardBtn" class="nav-btn"> 🗎 Dashboard</button>
+  </div>
+  <div id="dashboardView" class="view">
+<div class="dashboard">
+
+<div class="upload-card">
+  <div 
+    id="csvDropZone" 
+    class="csv-drop-zone"
+  >
+    <input 
+      type="file" 
+      id="csvFileInput" 
+      accept=".csv,text/csv" 
+      hidden
+    />
+
+    <div class="upload-content">
+      <div class="upload-icon">⇪</div>
+      <div class="upload-text">
+        <div class="upload-title">Drag and drop file or click to browse</div>
+        <div class="upload-subtitle">Supported format: CSV</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+  <div id="mapView" class="view active">
   <div class="map-wrapper">
     <img src="UpScaled.png" alt="Airport map" class="map-image" />
 
-    <!-- Match the viewBox to your image's pixel size -->
     <svg class="map-overlay" viewBox="0 0 1600 742" preserveAspectRatio="xMidYMid meet">
       
-      
-       <polygon
+       <ellipse
         id="B1"
         class="region"
-        points="515,385 551,368 572,380 576,415 539,432 514,415"
+        cx="546"
+        cy="401"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
-        <polygon
-        id="B2"
-        class="region"
-        points="362,486 403,471 423,482 422,518 383,533 362,512"
-      />
-
-        <polygon
+       <ellipse
         id="B3"
         class="region"
-        points="482,302 523,284 543,299 542,326 507,348 479,327"
+        cx="513"
+        cy="318"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
+      />
+
+       <ellipse
+        id="B2"
+        class="region"
+        cx="395"
+        cy="502"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
       
-        <polygon
+         <ellipse
         id="B4"
         class="region"
-        points="303,380 340,362 362,376 362,403 324,419 302,404"
+        cx="335"
+        cy="391"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
       
-      <polygon
+        <ellipse
         id="B5"
         class="region"
-        points="411,144 455,123 472,138 472,164 435,182 414,166"
+        cx="444"
+        cy="154"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
-      <polygon
+        <ellipse
         id="B6"
         class="region"
-        points="244,216 286,198 303,214 302,239 262,256 242,239"
+        cx="275"
+        cy="229"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
-      <polygon
+        <ellipse
         id="B7"
         class="region"
-        points="396,75 427,60 452,75 450,107 420,120 392,106"
+        cx="424"
+        cy="93"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
-      <polygon
+        <ellipse
         id="B8"
         class="region"
-        points="210,151 252,135 271,154 266,180 239,192 208,178"
+        cx="242"
+        cy="165"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
-      <polygon
+        <ellipse
         id="B9"
         class="region"
-        points="322,64 358,48 383,64 375,94 351,107 322,95"
+        cx="351"
+        cy="78"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
-      <polygon
+         <ellipse
         id="B10"
         class="region"
-        points="256,90 295,75 312,88 311,118 284,132 255,123"
+        cx="283"
+        cy="105"
+        rx="35"
+        ry="27.5"
+        transform="rotate(-27)"
       />
 
 
 
-      <polygon
+         <ellipse
         id="A1"
         class="region"
-        points="1314,518 1350,532 1355,559 1330,574 1299,560 1292,530"
+        cx="1326"
+        cy="548"
+        rx="35"
+        ry="27.5"
+        transform="rotate(27)"
       />
 
-      <polygon
+        <ellipse
         id="A2"
         class="region"
-        points="1146,408 1187,423 1190,448 1166,466 1132,454 1128,422"
+        cx="1160"
+        cy="437"
+        rx="35"
+        ry="27.5"
+        transform="rotate(27)"
       />
 
-      <polygon
+        <ellipse
         id="A3"
         class="region"
-        points="1343,444 1380,459 1383,486 1359,506 1323,486 1323,455"
+        cx="1354"
+        cy="475"
+        rx="35"
+        ry="27.5"
+        transform="rotate(27)"
       />
 
-      <polygon
+        <ellipse
         id="A4"
         class="region"
-        points="1220,334 1259,352 1260,375 1242,394 1202,375 1200,350"
+        cx="1230"
+        cy="366"
+        rx="35"
+        ry="27.5"
+        transform="rotate(27)"
       />
 
-      <polygon
+        <ellipse
         id="A5"
         class="region"
-        points="1332,376 1366,392 1371,419 1348,436 1312,418 1311,390"
+        cx="1341"
+        cy="408"
+        rx="35"
+        ry="27.5"
+        transform="rotate(27)"
       />
     
 
     </svg>
   
   </div>
+  </div>
   <script>
+  const mapBtn = document.getElementById("mapBtn");
+  const dashboardBtn = document.getElementById("dashboardBtn");
+
+  const mapView = document.getElementById("mapView");
+  const dashboardView = document.getElementById("dashboardView");
+
+  mapBtn.addEventListener("click", () => {
+    mapView.classList.add("active");
+    dashboardView.classList.remove("active");
+
+    mapBtn.classList.add("active");
+    dashboardBtn.classList.remove("active");
+  });
+
+  dashboardBtn.addEventListener("click", () => {
+    dashboardView.classList.add("active");
+    mapView.classList.remove("active");
+
+    dashboardBtn.classList.add("active");
+    mapBtn.classList.remove("active");
+  });
+  
   const svg = document.querySelector(".map-overlay");
   const points = [];
 
@@ -202,6 +402,77 @@
       console.log(points.map(p => `${p.x},${p.y}`).join(" "));
     }
   });
+  function randomGateColor() {
+    const regions = document.querySelectorAll(".region");
+
+    regions.forEach(region => {
+      const value = Math.random() < 0.5 ? 0 : 1;
+      if (value === 0) {
+        region.style.fill = "rgba(255, 0, 0, 0.4)"; // red
+      } else {
+        region.style.fill = "rgba(0, 200, 0, 0.4)"; // green
+      }
+    });
+  }
+
+  let uploadedCSV = null;
+
+const csvDropZone = document.getElementById("csvDropZone");
+const csvFileInput = document.getElementById("csvFileInput");
+
+csvDropZone.addEventListener("click", () => {
+  csvFileInput.click();
+});
+
+csvFileInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  handleCSVFile(file);
+});
+
+csvDropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  csvDropZone.classList.add("dragover");
+});
+
+csvDropZone.addEventListener("dragleave", () => {
+  csvDropZone.classList.remove("dragover");
+});
+
+csvDropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  csvDropZone.classList.remove("dragover");
+
+  const file = event.dataTransfer.files[0];
+  handleCSVFile(file);
+});
+
+function handleCSVFile(file) {
+  if (!file) return;
+
+  const isCSV =
+    file.name.toLowerCase().endsWith(".csv") ||
+    file.type === "text/csv" ||
+    file.type === "application/vnd.ms-excel";
+
+  if (!isCSV) {
+    alert("Please upload a CSV file.");
+    return;
+  }
+
+  uploadedCSV = file;
+
+  console.log("Stored CSV file:", uploadedCSV);
+  console.log("File name:", uploadedCSV.name);
+  console.log("File size:", uploadedCSV.size);
+
+  const title = csvDropZone.querySelector(".upload-title");
+  const subtitle = csvDropZone.querySelector(".upload-subtitle");
+
+  title.textContent = `Loaded: ${uploadedCSV.name}`;
+  subtitle.textContent = "CSV stored successfully";
+}
+
+  randomGateColor();
 </script>
 </body>
 </html>
