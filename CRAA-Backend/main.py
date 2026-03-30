@@ -1,10 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-# from sqlalchemy.ext.asyncio import AsyncSession
-# from sqlalchemy import text
 from supabase import Client
 from db import get_supabase
-import ssl 
 import msal 
 
 app = FastAPI()
@@ -13,6 +10,7 @@ app = FastAPI()
 origins = [
     "http://localhost:5173",
 ]
+
 ''' 
 TODO: PowerBI Embedded link
 
@@ -43,6 +41,9 @@ Output:
 def get_flights(supabase: Client = Depends(get_supabase)):
     res = supabase.table("flight_instances").select("*").execute()
     return res.data
+
+
+' ============================== '
 
 app.add_middleware(
 

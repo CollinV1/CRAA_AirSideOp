@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 
 '''
-Sets up access point for Supabase 
+Set up access point for Supabase 
 '''
 
 # load variables from .env
