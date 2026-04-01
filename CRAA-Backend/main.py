@@ -23,6 +23,8 @@ app = FastAPI()
 #     "null",
 # ]
 
+# TODO: modify allow_origins to be safer, not allow all links, purely for testing
+
 app.add_middleware(
 
     CORSMiddleware,
@@ -61,7 +63,13 @@ RAW_FLIGHT_COLUMNS = [
 
 def parse_raw_flights_csv(contents: bytes) -> list[dict]:
     """
+    Verifies .csv file format matches table layout of raw_flights
 
+    Parameters -->
+        contents: dictionary of .csv contents
+
+    Returns -->
+        rows: array of .csv contents
     """
     try:
         text = contents.decode("utf-8-sig")
@@ -109,15 +117,22 @@ def parse_raw_flights_csv(contents: bytes) -> list[dict]:
 
     return rows
 
-@app.post("/upload-test")
-async def upload_test(file: UploadFile = File(...)):
-    return {"filename": file.filename}
 
 @app.post("/upload-raw-data")
 async def upload_raw_data(
     file: UploadFile = File(...),
     supabase: Client = Depends(get_supabase),
 ):
+    """
+    Updates raw_flights
+
+    Parameters -->
+        file: .csv file user wishes to upload
+        supabase: calls get_supabase to get client
+
+    Returns -->
+        message and filename, raw_flights is populated with data from .csv
+    """
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
 
@@ -127,6 +142,7 @@ async def upload_raw_data(
     if not rows:
         raise HTTPException(status_code=400, detail="Uploaded CSV contains no data rows.")
 
+    # TODO: change raw_flights_test to raw_flights
     supabase.table("raw_flights_test").delete().neq("Carrier", "").execute()
 
     result = supabase.table("raw_flights_test").insert(rows).execute()
@@ -137,57 +153,6 @@ async def upload_raw_data(
         # "rows_inserted": len(result.data or []),
     }
 
-# @app.post("/upload-raw-data")
-# async def upload_raw_data(
-#     file: UploadFile = File(...),
-#     supabase: Client = Depends(get_supabase),
-# ):
-#     contents = await file.read()
-
-#     text = contents.decode("utf-8-sig")
-#     reader = csv.DictReader(io.StringIO(text))
-
-#     rows = list(reader)
-
-#     # Optional: clear table
-#     supabase.table("raw_flights").delete().neq("id", 0).execute()
-
-#     result = supabase.table("raw_flights").insert(rows).execute()
-
-#     return {
-#         "message": "Raw CSV uploaded to raw_flights.",
-#         "rows_inserted": len(result.data or []),
-#     }
-# def parse_raw_flights_csv(contents: bytes) -> list[dict]:
-#     text_stream = io.StringIO(contents.decode("utf-8-sig"))
-#     reader = csv.DictReader(text_stream)
-#     if reader.fieldnames is None:
-#         raise ValueError("Uploaded CSV is missing a header row.")
-
-#     missing_columns = [column for column in RAW_FLIGHT_COLUMNS if column not in reader.fieldnames]
-#     if missing_columns:
-#         raise ValueError(f"Uploaded CSV is missing required columns: {', '.join(missing_columns)}")
-
-#     rows = []
-#     for row in reader:
-#         if not any((value or "").strip() for value in row.values()):
-#             continue
-
-#         rows.append({
-#             "Carrier": (row.get("Carrier") or "").strip(),
-#             "FlightNumber": int((row.get("FlightNumber") or "0").strip()),
-#             "ServiceType": (row.get("ServiceType") or "").strip() or None,
-#             "EffectiveDate": (row.get("EffectiveDate") or "").strip(),
-#             "DiscontinuedDate": (row.get("DiscontinuedDate") or "").strip(),
-#             "DOW": (row.get("DOW") or "").strip(),
-#             "Departure Airport": (row.get("Departure Airport") or "").strip(),
-#             "DepartureTime": int((row.get("DepartureTime") or "0").strip()),
-#             "ArrivalAirport": (row.get("ArrivalAirport") or "").strip(),
-#             "ArrivalTime": int((row.get("ArrivalTime") or "0").strip()),
-#             "SubAircraftTypeCode": (row.get("SubAircraftTypeCode") or "").strip(),
-#         })
-#     return rows
-
 ''' 
 TODO: PowerBI Embedded link
 
@@ -196,6 +161,8 @@ Purpose: Create PowerBI endpoint callable by frontend
 Output: json embedToken + embedURL 
 
 '''
+
+
 @app.get("/get-embed-token")
 def get_embed_token():
     try:
@@ -219,42 +186,6 @@ def get_flights(supabase: Client = Depends(get_supabase)):
     res = supabase.table("flight_instances").select("*").execute()
     return res.data
 
-
-# @app.post("/upload-raw-data")
-# async def upload_raw_data(
-#     file: UploadFile = File(...),
-#     supabase: Client = Depends(get_supabase),
-# ):
-#     if not file.filename or not file.filename.lower().endswith(".csv"):
-#         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
-
-#     try:
-#         contents = await file.read()
-#         rows = parse_raw_flights_csv(contents)
-#         if not rows:
-#             raise HTTPException(status_code=400, detail="Uploaded CSV contains no data rows.")
-
-#         supabase.table("raw_flights").delete().neq("id", 0).execute()
-
-#         batch_size = 500
-#         inserted_count = 0
-#         for index in range(0, len(rows), batch_size):
-#             batch = rows[index:index + batch_size]
-#             inserted = supabase.table("raw_flights").insert(batch).execute().data or []
-#             inserted_count += len(inserted)
-
-#         return {
-#             "message": "Raw CSV uploaded to raw_flights.",
-#             "file_name": file.filename,
-#             "rows_inserted": inserted_count,
-#         }
-#     except HTTPException:
-#         raise
-#     except ValueError as exc:
-#         raise HTTPException(status_code=400, detail=str(exc)) from exc
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=f"Failed to upload raw CSV to Supabase: {exc}") from exc
-
 @app.post("/expansion/run")
 def run_expansion(
     request: ExpansionRequest,
@@ -270,6 +201,7 @@ def run_expansion(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to expand raw flights into flight_instances: {exc}") from exc
 
+@app.post("expansion/upload")
 
 @app.post("/scenarios/run")
 def run_scenarios(
