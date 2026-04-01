@@ -446,7 +446,8 @@ csvDropZone.addEventListener("drop", (event) => {
   handleCSVFile(file);
 });
 
-function handleCSVFile(file) {
+// async
+async function handleCSVFile(file) {
   if (!file) return;
 
   const isCSV =
@@ -469,7 +470,40 @@ function handleCSVFile(file) {
   const subtitle = csvDropZone.querySelector(".upload-subtitle");
 
   title.textContent = `Loaded: ${uploadedCSV.name}`;
-  subtitle.textContent = "CSV stored successfully";
+  subtitle.textContent = "Uploading...";
+
+  // file sent to the backend
+  try {
+    const formData = new FormData();
+    formData.append("file", uploadedCSV);
+
+    const response = await fetch("http://127.0.0.1:8000/upload-raw-data", {
+      method: "POST",
+      body: formData
+    });
+
+    // const result = await response.json();
+    const text = await response.text();
+    // console.log("status:", response.status);
+    // console.log("body:", text);
+
+    // if(!response.ok) {
+    //   const errorText = await response.text();
+    //   console.error("Upload failed:", errorText);
+    //   subtitle.textContent = "Upload failed";
+    //   return;
+    // }
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status} ${text}`);
+    }
+  
+    subtitle.textContent = "Upload complete";
+    console.log("Backend result: ", text);
+  } catch (error) {
+    console.error(error);
+    subtitle.textContent = "2 Upload failed";
+  }
 }
 
   randomGateColor();
