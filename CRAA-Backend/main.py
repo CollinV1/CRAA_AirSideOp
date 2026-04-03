@@ -130,40 +130,8 @@ def parse_raw_flights_csv(contents: bytes) -> list[dict]:
 
 
 def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
-    def delete_all_rows(table_name: str, pk_column: str = "id", batch_size: int = 1000) -> None:
-        while True:
-            batch = (
-                supabase.table(table_name)
-                .select(pk_column)
-                .order(pk_column)
-                .limit(batch_size)
-                .execute()
-            ).data or []
-            if not batch:
-                break
-
-            ids = [row[pk_column] for row in batch]
-            supabase.table(table_name).delete().in_(pk_column, ids).execute()
-
-            remaining = (
-                supabase.table(table_name)
-                .select(pk_column)
-                .in_(pk_column, ids)
-                .limit(1)
-                .execute()
-            ).data or []
-            if remaining:
-                raise RuntimeError(
-                    f"Failed to clear dependent table '{table_name}'. "
-                    "The backend may be using insufficient Supabase permissions or blocked by RLS."
-                )
-
-    # Clear dependent tables first so raw_flights_test can be safely replaced.
-    # delete_all_rows("flight_instances_test")
-    # delete_all_rows("flights_assignment_test")
-    # delete_all_rows("scenario_runs_test")
-    delete_all_rows("flights_test")
-    delete_all_rows("raw_flights_test")
+    # function public.reset_tables defined in Supabase
+    supabase.rpc("reset_tables").execute()
 
     inserted_count = 0
     batch_size = 500
@@ -281,8 +249,8 @@ async def upload_and_run_pipeline(
     supabase: Client = Depends(get_supabase),
 ):
     """
-    Clean pipeline:
-    upload CSV -> raw_flights_test -> flights_test -> flight_instances -> schedule tables -> downloadable CSV
+    Upload pipeline only:
+    upload CSV -> raw_flights_test -> flights_test
     """
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
@@ -295,32 +263,59 @@ async def upload_and_run_pipeline(
 
         raw_inserted = replace_raw_flights_table(supabase, rows)
         normalization_result = replace_flights(supabase)
+        return {
+            "message": "Upload and normalization completed successfully.",
+            "file_name": file.filename,
+            "raw_rows_inserted": raw_inserted,
+            "raw_table": RAW_TABLE_NAME,
+            "normalized_table": NORMALIZED_TABLE_NAME,
+            "normalization": normalization_result,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Pipeline failed: {exc}") from exc
+
+
+@app.post("/pipeline/build-schedule")
+def build_schedule_pipeline(
+    request: ScenarioRunRequest,
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Schedule pipeline:
+    flights_test -> flight_instances_test (for requested date range) -> schedule tables -> downloadable CSV
+    """
+    try:
         expansion_result = expand_raw_flights_to_instances(
             supabase,
-            start_date=start_date,
-            end_date=end_date,
+            start_date=request.start_date,
+            end_date=request.end_date,
             replace_existing=True,
         )
 
         schedule_result = build_and_store_optimal_schedule(
             supabase,
-            start_date=start_date,
-            end_date=end_date,
-            turnaround_min=turnaround_min,
-            replace_existing=True,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            turnaround_min=request.turnaround_min,
+            replace_existing=request.replace_existing,
         )
 
-        # TODO: Check 
         optimal_turns = schedule_result.pop("optimal_turns", [])
         if not optimal_turns:
-            raise HTTPException(status_code=404, detail="No optimal schedule could be generated from flight_instances.")
+            raise HTTPException(status_code=404, detail="No optimal schedule could be generated from flight_instances_test.")
 
-        # TODO: Check
         csv_path = export_optimal_schedule_csv(optimal_turns, OPTIMAL_SCHEDULE_CSV)
         return {
-            "message": "Pipeline completed successfully.",
-            "file_name": file.filename,
-            "raw_rows_inserted": raw_inserted,
+            "message": "Schedule build completed successfully.",
+            "normalized_table": NORMALIZED_TABLE_NAME,
+            "expanded_table": EXPANDED_TABLE_NAME,
+            "date_range": {
+                "start_date": str(request.start_date) if request.start_date else None,
+                "end_date": str(request.end_date) if request.end_date else None,
+            },
+            "turnaround_min": request.turnaround_min,
             "expansion": expansion_result,
             "scheduling": schedule_result,
             "schedule_csv_path": str(csv_path),
@@ -329,7 +324,7 @@ async def upload_and_run_pipeline(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Pipeline failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Schedule build failed: {exc}") from exc
 
 
 @app.get("/downloads/optimal-flight-schedule.csv")

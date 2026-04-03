@@ -12,7 +12,49 @@
 .view.active {
   display: block;
 }
+/* Date selector aligning*/
+.date-bar {
+  margin-top: 15px;
+  background: #2E5C8A;
+  border-radius: 18px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  color: white;
+}
+/* buttons themselves */
+.date-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
+.date-controls select {
+  background: #f2f2f2;
+  color: #111;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.date-display {
+  text-align: right;
+  min-width: 170px;
+}
+/* Words displaying the time next to the buttons */
+.date-main {
+  font-size: 18px;
+  font-weight: 700;
+}
+.date-sub {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 4px;
+}
 .dashboard {
   max-width: 1600px;
   margin: 0 auto;
@@ -24,6 +66,11 @@
   margin: 0 auto;
   padding: 20px;
   background: #1B365D;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
 
 }
   .nav-btn {
@@ -142,12 +189,47 @@
       fill: rgba(100, 150, 255, 0.4);
     }
 
-  </style>
+</style>
 </head>
 <body>
 <div class="Header">
+    <!-- Get the gate and dash buttons on the left, everything else on the right -->
+  <div class="left header">
   <button id="mapBtn" class="nav-btn active">✈︎ Gate View</button>
   <button id="dashboardBtn" class="nav-btn"> 🗎 Dashboard</button>
+  </div>
+
+  <div class="date-bar">
+    <div class="date-controls">
+      <span class="clock"></span>
+
+      <select id="monthSelect">
+        <option value="0">January</option>
+        <option value="1">February</option>
+        <option value="2">March</option>
+        <option value="3" selected>April</option>
+        <option value="4">May</option>
+        <option value="5">June</option>
+        <option value="6">July</option>
+        <option value="7">August</option>
+        <option value="8">September</option>
+        <option value="9">October</option>
+        <option value="10">November</option>
+        <option value="11">December</option>
+      </select>
+
+      <select id="daySelect"></select>
+
+      <select id="yearSelect"></select>
+
+      <select id="timeSelect"></select>
+    </div>
+
+    <div class="date-display">
+      <div class="date-main" id="selectedDateText">Apr 1, 2026</div>
+      <div class="date-sub" id="selectedTimeText">02:00 PM</div>
+    </div>
+  </div>
   </div>
   <div id="dashboardView" class="view">
 <div class="dashboard">
@@ -446,8 +528,7 @@ csvDropZone.addEventListener("drop", (event) => {
   handleCSVFile(file);
 });
 
-// async
-async function handleCSVFile(file) {
+function handleCSVFile(file) {
   if (!file) return;
 
   const isCSV =
@@ -470,32 +551,110 @@ async function handleCSVFile(file) {
   const subtitle = csvDropZone.querySelector(".upload-subtitle");
 
   title.textContent = `Loaded: ${uploadedCSV.name}`;
-  subtitle.textContent = "Uploading and processing...";
+  subtitle.textContent = "CSV stored successfully";
+}
 
-  // file sent to the backend
-  try {
-    const formData = new FormData();
-    formData.append("file", uploadedCSV);
+const monthSelect = document.getElementById("monthSelect");
+const daySelect = document.getElementById("daySelect");
+const yearSelect = document.getElementById("yearSelect");
+const timeSelect = document.getElementById("timeSelect");
 
-    const response = await fetch("http://127.0.0.1:8000/pipeline/upload-and-run", {
-      method: "POST",
-      body: formData
-    });
+const selectedDateText = document.getElementById("selectedDateText");
+const selectedTimeText = document.getElementById("selectedTimeText");
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Upload failed: ${response.status} ${errorText}`);
-    }
-
-    const result = await response.json();
-    subtitle.innerHTML = `Upload complete. <a href="http://127.0.0.1:8000${result.download_url}" target="_blank" rel="noopener noreferrer">Download optimal schedule CSV</a>`;
-    console.log("Backend result: ", result);
-  } catch (error) {
-    console.error(error);
-    subtitle.textContent = "Upload failed";
+function populateYears() {
+  for (let year = 2024; year <= 2035; year++) {
+    const option = document.createElement("option");
+    option.value = year;
+    option.textContent = year;
+    if (year === 2026) option.selected = true;
+    yearSelect.appendChild(option);
   }
 }
 
+function populateTimes() {
+  for (let hour = 0; hour < 24; hour++) {
+    const option = document.createElement("option");
+    const value = String(hour).padStart(2, "0") + ":00";
+    option.value = value;
+    option.textContent = value;
+
+    if (value === "14:00") option.selected = true;
+
+    timeSelect.appendChild(option);
+  }
+}
+//This entire func is more or less a placeholder, just to get the calendar working for now
+function populateDays() {
+// Get the selected month/year from dropdown and convert it to a number
+
+  const month = parseInt(monthSelect.value, 10);
+  const year = parseInt(yearSelect.value, 10);
+// Create a Date object for the "0th" day of the next month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const currentDay = daySelect.value;
+
+// Loop from day 1 up to the number of days in the selected month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const option = document.createElement("option");
+    option.value = day;
+    option.textContent = day;
+
+    if (parseInt(currentDay, 10) === day) {
+      option.selected = true;
+    }
+
+    daySelect.appendChild(option);
+  }
+
+  if (!daySelect.value) {
+    daySelect.value = "1";
+  }
+}
+
+function formatDateDisplay(date) {
+  const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${monthsShort[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+function formatTimeDisplay(time24) {
+  let [hours, minutes] = time24.split(":").map(Number);
+  const suffix = hours >= 12 ? "PM" : "AM";
+
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
+function updateDateDisplay() {
+  const year = parseInt(yearSelect.value, 10);
+  const month = parseInt(monthSelect.value, 10);
+  const day = parseInt(daySelect.value, 10);
+  const time = timeSelect.value;
+
+  const selectedDate = new Date(year, month, day);
+
+  selectedDateText.textContent = formatDateDisplay(selectedDate);
+  selectedTimeText.textContent = formatTimeDisplay(time);
+}
+
+populateYears();
+populateTimes();
+populateDays();
+updateDateDisplay();
+
+monthSelect.addEventListener("change", () => {
+  populateDays();
+  updateDateDisplay();
+});
+
+daySelect.addEventListener("change", updateDateDisplay);
+yearSelect.addEventListener("change", () => {
+  populateDays();
+  updateDateDisplay();
+});
+timeSelect.addEventListener("change", updateDateDisplay);
   randomGateColor();
 </script>
 </body>
