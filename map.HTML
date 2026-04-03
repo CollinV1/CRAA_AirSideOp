@@ -175,6 +175,164 @@
   color: #a9bad9;
 }
 
+.upload-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+}
+
+.range-controls {
+  margin-top: 18px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #d9e5fb;
+  font-size: 14px;
+}
+
+.range-field input {
+  border: 1px solid rgba(160, 180, 220, 0.45);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #162742;
+  color: white;
+}
+
+.build-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  background: #9fc2ff;
+  color: #10233d;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.build-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.analytics-shell {
+  max-width: 1200px;
+  margin: 30px auto;
+  padding: 28px;
+  background: #223554;
+  border-radius: 20px;
+}
+
+.analytics-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.analytics-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: white;
+}
+
+.analytics-copy {
+  color: #a9bad9;
+  font-size: 15px;
+  max-width: 720px;
+}
+
+.analytics-status {
+  color: #cbd9f6;
+  font-size: 14px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #162742;
+  border: 1px solid rgba(160, 180, 220, 0.18);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.stat-label {
+  color: #9fb3d9;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stat-value {
+  margin-top: 10px;
+  color: white;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.stat-detail {
+  margin-top: 6px;
+  color: #bfd0ef;
+  font-size: 14px;
+}
+
+.analytics-panel {
+  background: linear-gradient(180deg, #162742 0%, #102038 100%);
+  border: 1px solid rgba(160, 180, 220, 0.18);
+  border-radius: 18px;
+  min-height: 680px;
+  overflow: hidden;
+}
+
+.analytics-sample {
+  padding: 28px;
+}
+
+.analytics-sample h3 {
+  margin: 0 0 10px;
+  color: white;
+  font-size: 22px;
+}
+
+.analytics-sample p {
+  margin: 0 0 20px;
+  color: #bfd0ef;
+}
+
+.analytics-list {
+  display: grid;
+  gap: 12px;
+}
+
+.analytics-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: white;
+}
+
+.analytics-embed {
+  width: 100%;
+  min-height: 680px;
+  display: none;
+}
+
     .region {
       fill: rgba(255, 255, 255, 0.35);
       stroke: none;
@@ -197,6 +355,7 @@
   <div class="left header">
   <button id="mapBtn" class="nav-btn active">✈︎ Gate View</button>
   <button id="dashboardBtn" class="nav-btn"> 🗎 Dashboard</button>
+  <button id="analyticsBtn" class="nav-btn">▣ Analytics</button>
   </div>
 
   <div class="date-bar">
@@ -254,9 +413,80 @@
       </div>
     </div>
   </div>
+  <div class="range-controls">
+    <label class="range-field">
+      <span>Start Date</span>
+      <input id="startDateInput" type="date" value="2026-04-01" />
+    </label>
+    <label class="range-field">
+      <span>End Date</span>
+      <input id="endDateInput" type="date" value="2026-04-01" />
+    </label>
+  </div>
+  <div class="upload-actions">
+    <button id="buildScheduleBtn" class="build-btn" disabled>Build Schedule For Selected Day</button>
+  </div>
 </div>
 </div>
 </div>
+  <div id="analyticsView" class="view">
+    <div class="analytics-shell">
+      <div class="analytics-header">
+        <div>
+          <div class="analytics-title">Operations Analytics</div>
+          <div class="analytics-copy">
+            This page defaults to a sample analytics layout and automatically switches to the latest embedded Power BI dashboard when the embed configuration is available.
+          </div>
+        </div>
+        <div class="analytics-status" id="analyticsStatus">Sample analytics view loaded.</div>
+      </div>
+
+      <div class="analytics-grid">
+        <div class="stat-card">
+          <div class="stat-label">Schedule Window</div>
+          <div class="stat-value" id="analyticsWindowValue">1 day</div>
+          <div class="stat-detail">Current sample reporting period</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Gate Utilization</div>
+          <div class="stat-value" id="analyticsUtilizationValue">--</div>
+          <div class="stat-detail" id="analyticsUtilizationDetail">Waiting for latest schedule data</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Avg Turnaround</div>
+          <div class="stat-value" id="analyticsTurnaroundValue">--</div>
+          <div class="stat-detail" id="analyticsTurnaroundDetail">Waiting for latest schedule data</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Conflicts</div>
+          <div class="stat-value" id="analyticsConflictValue">--</div>
+          <div class="stat-detail" id="analyticsConflictDetail">Waiting for latest schedule data</div>
+        </div>
+      </div>
+
+      <div class="analytics-panel">
+        <div id="analyticsSample" class="analytics-sample">
+          <h3>Sample Power BI Landing State</h3>
+          <p>The embedded dashboard will appear here after the frontend requests the latest Power BI embed token from the backend.</p>
+          <div class="analytics-list">
+            <div class="analytics-list-item">
+              <span>Latest schedule build</span>
+              <strong id="sampleScheduleBuild">Not built yet</strong>
+            </div>
+            <div class="analytics-list-item">
+              <span>Source tables</span>
+              <strong>`raw_flights_test` -> `flights_test` -> `flight_instances_test`</strong>
+            </div>
+            <div class="analytics-list-item">
+              <span>Analytics source</span>
+              <strong id="analyticsSourceText">Latest database-backed Power BI report</strong>
+            </div>
+          </div>
+        </div>
+        <div id="powerbiContainer" class="analytics-embed"></div>
+      </div>
+    </div>
+  </div>
   <div id="mapView" class="view active">
   <div class="map-wrapper">
     <img src="UpScaled.png" alt="Airport map" class="map-image" />
@@ -420,27 +650,50 @@
   
   </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js"></script>
   <script>
   const mapBtn = document.getElementById("mapBtn");
   const dashboardBtn = document.getElementById("dashboardBtn");
+  const analyticsBtn = document.getElementById("analyticsBtn");
 
   const mapView = document.getElementById("mapView");
   const dashboardView = document.getElementById("dashboardView");
+  const analyticsView = document.getElementById("analyticsView");
+  const analyticsStatus = document.getElementById("analyticsStatus");
+  const analyticsSample = document.getElementById("analyticsSample");
+  const powerbiContainer = document.getElementById("powerbiContainer");
+  const sampleScheduleBuild = document.getElementById("sampleScheduleBuild");
+  const analyticsWindowValue = document.getElementById("analyticsWindowValue");
+  const analyticsUtilizationValue = document.getElementById("analyticsUtilizationValue");
+  const analyticsUtilizationDetail = document.getElementById("analyticsUtilizationDetail");
+  const analyticsTurnaroundValue = document.getElementById("analyticsTurnaroundValue");
+  const analyticsTurnaroundDetail = document.getElementById("analyticsTurnaroundDetail");
+  const analyticsConflictValue = document.getElementById("analyticsConflictValue");
+  const analyticsConflictDetail = document.getElementById("analyticsConflictDetail");
+  const analyticsSourceText = document.getElementById("analyticsSourceText");
+  let analyticsLoaded = false;
+
+  function activateView(activeView, activeButton) {
+    [mapView, dashboardView, analyticsView].forEach(view => view.classList.remove("active"));
+    [mapBtn, dashboardBtn, analyticsBtn].forEach(button => button.classList.remove("active"));
+    activeView.classList.add("active");
+    activeButton.classList.add("active");
+  }
 
   mapBtn.addEventListener("click", () => {
-    mapView.classList.add("active");
-    dashboardView.classList.remove("active");
-
-    mapBtn.classList.add("active");
-    dashboardBtn.classList.remove("active");
+    activateView(mapView, mapBtn);
   });
 
   dashboardBtn.addEventListener("click", () => {
-    dashboardView.classList.add("active");
-    mapView.classList.remove("active");
+    activateView(dashboardView, dashboardBtn);
+  });
 
-    dashboardBtn.classList.add("active");
-    mapBtn.classList.remove("active");
+  analyticsBtn.addEventListener("click", async () => {
+    activateView(analyticsView, analyticsBtn);
+    await loadAnalyticsSummary();
+    if (!analyticsLoaded) {
+      await loadPowerBIAnalytics();
+    }
   });
   
   const svg = document.querySelector(".map-overlay");
@@ -497,10 +750,14 @@
     });
   }
 
-  let uploadedCSV = null;
+let uploadedCSV = null;
+let uploadedNormalized = false;
 
 const csvDropZone = document.getElementById("csvDropZone");
 const csvFileInput = document.getElementById("csvFileInput");
+const buildScheduleBtn = document.getElementById("buildScheduleBtn");
+const startDateInput = document.getElementById("startDateInput");
+const endDateInput = document.getElementById("endDateInput");
 
 csvDropZone.addEventListener("click", () => {
   csvFileInput.click();
@@ -528,7 +785,8 @@ csvDropZone.addEventListener("drop", (event) => {
   handleCSVFile(file);
 });
 
-function handleCSVFile(file) {
+// async
+async function handleCSVFile(file) {
   if (!file) return;
 
   const isCSV =
@@ -551,7 +809,191 @@ function handleCSVFile(file) {
   const subtitle = csvDropZone.querySelector(".upload-subtitle");
 
   title.textContent = `Loaded: ${uploadedCSV.name}`;
-  subtitle.textContent = "CSV stored successfully";
+  subtitle.textContent = "Uploading and normalizing...";
+  buildScheduleBtn.disabled = true;
+
+  // file sent to the backend
+  try {
+    const formData = new FormData();
+    formData.append("file", uploadedCSV);
+
+    const response = await fetch("http://127.0.0.1:8000/pipeline/upload-and-run", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Upload failed: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    uploadedNormalized = true;
+    buildScheduleBtn.disabled = false;
+    subtitle.textContent = "Upload complete.";
+    sampleScheduleBuild.textContent = "Raw and normalized tables refreshed";
+    console.log("Backend result: ", result);
+  } catch (error) {
+    console.error(error);
+    subtitle.textContent = "Upload failed";
+    uploadedNormalized = false;
+    buildScheduleBtn.disabled = true;
+  }
+}
+
+function getSelectedDateIso() {
+  const year = parseInt(yearSelect.value, 10);
+  const month = parseInt(monthSelect.value, 10);
+  const day = parseInt(daySelect.value, 10);
+  return new Date(year, month, day).toISOString().slice(0, 10);
+}
+
+function syncRangeInputsFromSelector() {
+  const selectedDate = getSelectedDateIso();
+  if (!startDateInput.value) startDateInput.value = selectedDate;
+  if (!endDateInput.value) endDateInput.value = selectedDate;
+}
+
+async function buildScheduleForSelectedDay() {
+  const subtitle = csvDropZone.querySelector(".upload-subtitle");
+
+  if (!uploadedNormalized) {
+    subtitle.textContent = "Upload a CSV first.";
+    return;
+  }
+
+  const startDate = startDateInput.value;
+  const endDate = endDateInput.value;
+
+  if (!startDate || !endDate) {
+    subtitle.textContent = "Choose both a start date and an end date.";
+    return;
+  }
+
+  if (startDate > endDate) {
+    subtitle.textContent = "Start date must be on or before end date.";
+    return;
+  }
+
+  subtitle.textContent = "Building schedule...";
+  buildScheduleBtn.disabled = true;
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/pipeline/build-schedule", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        start_date: startDate,
+        end_date: endDate
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Build failed: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    subtitle.innerHTML = `Schedule ready for ${startDate} to ${endDate}. <a href="http://127.0.0.1:8000${result.download_url}" target="_blank" rel="noopener noreferrer">Download optimal schedule CSV</a>`;
+    sampleScheduleBuild.textContent = `${startDate} to ${endDate}`;
+    analyticsWindowValue.textContent = startDate === endDate ? "1 day" : `${startDate} → ${endDate}`;
+    await loadAnalyticsSummary();
+    console.log("Schedule build result:", result);
+  } catch (error) {
+    console.error(error);
+    subtitle.textContent = "Schedule build failed";
+  } finally {
+    buildScheduleBtn.disabled = false;
+  }
+}
+
+buildScheduleBtn.addEventListener("click", buildScheduleForSelectedDay);
+
+async function loadAnalyticsSummary() {
+  try {
+    const response = await fetch("http://127.0.0.1:8000/powerbi/optimized-schedule");
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    const payload = await response.json();
+    const rows = payload.data || [];
+    const totalAssignments = rows.length;
+    const scheduledAssignments = rows.filter(row => Number(row.is_conflict) === 0).length;
+    const conflicts = rows.filter(row => Number(row.is_conflict) !== 0).length;
+    const gateIds = new Set(rows.map(row => row.gate_id).filter(Boolean));
+    const avgTurnaround = totalAssignments
+      ? Math.round(rows.reduce((sum, row) => sum + Number(row.turnaround_minutes || 0), 0) / totalAssignments)
+      : 0;
+    const utilization = gateIds.size ? Math.round((scheduledAssignments / gateIds.size) * 10) / 10 : 0;
+
+    analyticsUtilizationValue.textContent = `${utilization}`;
+    analyticsUtilizationDetail.textContent = `${scheduledAssignments} assigned turns across ${gateIds.size || 0} active gates`;
+    analyticsTurnaroundValue.textContent = `${avgTurnaround}m`;
+    analyticsTurnaroundDetail.textContent = payload.scenario?.name || "Latest available scenario";
+    analyticsConflictValue.textContent = `${conflicts}`;
+    analyticsConflictDetail.textContent = `${totalAssignments} total assignment rows from flights_assignment_test`;
+    analyticsSourceText.textContent = "Live summary from /powerbi/optimized-schedule and embedded Power BI report";
+  } catch (error) {
+    console.error("Analytics summary load failed:", error);
+    analyticsUtilizationValue.textContent = "--";
+    analyticsTurnaroundValue.textContent = "--";
+    analyticsConflictValue.textContent = "--";
+    analyticsUtilizationDetail.textContent = "Unable to load latest analytics summary";
+    analyticsTurnaroundDetail.textContent = "Unable to load latest analytics summary";
+    analyticsConflictDetail.textContent = "Unable to load latest analytics summary";
+    analyticsSourceText.textContent = "Power BI report only";
+  }
+}
+
+async function loadPowerBIAnalytics() {
+  analyticsStatus.textContent = "Loading Power BI analytics...";
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/get-embed-token");
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    const embedConfig = await response.json();
+    if (!window.powerbi || !window['powerbi-client']) {
+      throw new Error("Power BI client library is unavailable.");
+    }
+
+    const models = window['powerbi-client'].models;
+    powerbiContainer.style.display = "block";
+    analyticsSample.style.display = "none";
+
+    window.powerbi.reset(powerbiContainer);
+    window.powerbi.embed(powerbiContainer, {
+      type: "report",
+      tokenType: models.TokenType.Embed,
+      accessToken: embedConfig.embedToken,
+      embedUrl: embedConfig.embedUrl,
+      id: embedConfig.reportId,
+      permissions: models.Permissions.All,
+      settings: {
+        panes: {
+          filters: { visible: false },
+          pageNavigation: { visible: true }
+        },
+        background: models.BackgroundType.Transparent
+      }
+    });
+
+    analyticsLoaded = true;
+    analyticsStatus.textContent = "Live Power BI analytics loaded from the latest database-backed report.";
+  } catch (error) {
+    console.error("Power BI load failed:", error);
+    analyticsLoaded = false;
+    analyticsStatus.textContent = "Power BI analytics unavailable. Showing sample analytics view.";
+    analyticsSample.style.display = "block";
+    powerbiContainer.style.display = "none";
+  }
 }
 
 const monthSelect = document.getElementById("monthSelect");
@@ -643,16 +1085,22 @@ populateYears();
 populateTimes();
 populateDays();
 updateDateDisplay();
+syncRangeInputsFromSelector();
 
 monthSelect.addEventListener("change", () => {
   populateDays();
   updateDateDisplay();
+  syncRangeInputsFromSelector();
 });
 
-daySelect.addEventListener("change", updateDateDisplay);
+daySelect.addEventListener("change", () => {
+  updateDateDisplay();
+  syncRangeInputsFromSelector();
+});
 yearSelect.addEventListener("change", () => {
   populateDays();
   updateDateDisplay();
+  syncRangeInputsFromSelector();
 });
 timeSelect.addEventListener("change", updateDateDisplay);
   randomGateColor();

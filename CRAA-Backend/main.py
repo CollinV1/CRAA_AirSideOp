@@ -350,7 +350,7 @@ def get_powerbi_optimized_schedule(
     """
     if scenario_id is None:
         scenario_res = (
-            supabase.table("scenario_runs_test")
+            supabase.table("scenario_runs")
             .select("id,name,created_at,parameters")
             .order("created_at", desc=True)
             .limit(1)
@@ -361,7 +361,7 @@ def get_powerbi_optimized_schedule(
         scenario = scenario_res.data[0]
     else:
         scenario_res = (
-            supabase.table("scenario_runs_test")
+            supabase.table("scenario_runs")
             .select("id,name,created_at,parameters")
             .eq("id", scenario_id)
             .limit(1)
@@ -388,7 +388,7 @@ def get_powerbi_optimized_schedule(
 
     flight_ids = sorted({assignment["flight_id"] for assignment in assignments})
     flights_res = (
-        supabase.table("flights_test")
+        supabase.table("flights")
         .select("id,flight_number,arrival_time,departure_time,airline_id,turnaround_minutes,raw_schedule_id")
         .in_("id", flight_ids)
         .execute()
