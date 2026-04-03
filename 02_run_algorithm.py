@@ -1,8 +1,8 @@
 """
 SCRIPT 2 — Run Scheduling Algorithm & Write to Database
 =========================================================
-Runs the Greedy Interval Scheduling algorithm across the full year
-and populates:
+Runs the Greedy Interval Scheduling algorithm across the full year,
+exports the optimal gate schedule to CSV, and optionally populates:
   - scenario_runs       (one row per algorithm run)
   - flights             (each matched inbound/outbound turn)
   - flights_assignment  (gate assignment result for each flight)
@@ -14,15 +14,25 @@ Two scenarios are inserted automatically:
 Usage:
     python 02_run_algorithm.py
 
+Primary output:
+    optimal_flight_schedule.csv
+
 Requirements:
     pip install psycopg2-binary pandas
 """
 
 import json
-import pandas as pd
-import psycopg2
-from psycopg2.extras import execute_values
+from pathlib import Path
 from datetime import datetime, timedelta
+
+import pandas as pd
+
+try:
+    import psycopg2
+    from psycopg2.extras import execute_values
+except ImportError:  # Database export is optional for CSV-only runs.
+    psycopg2 = None
+    execute_values = None
 
 '''
 TODO
@@ -41,7 +51,8 @@ DB_CONFIG = {
     "password": "your_password",
 }
 
-CSV_PATH = "01FEB2431JAN25.csv"
+CSV_PATH = "supabase/seeds/s01FEB2431JAN25.csv"
+OUTPUT_CSV_PATH = "optimal_flight_schedule.csv"
 
 # ── Aircraft size classification ──────────────────────────────────────────────
 SIZE_MAP = {
@@ -60,14 +71,35 @@ GATE_CONFIG = (
 )
 
 def gate_fits(gate_type, size):
+    """
+    Checks the compatubiility between an aircrafts size and gate
+
+    Parameters -->
+        gate_type : "SMALL", "MEDIUM", or "LARGE"
+            gate we want to fit the plane in
+        size : "SMALL", "MEDIUM", or "LARGE"
+            size of the plane we want to fit in gate
+
+    Returns -->
+        Boolean value telling if plane will fit in provided gate 
+    """
     if gate_type == "SMALL":  return size == "SMALL"
-    if gate_type == "MEDIUM": return size in ("SMALL", "MEDIUM")
+    if gate_type == "MEDIUM": return size in ("SMALL", "MEDIUM") # MEDIUM fits SMALL & MEDIUM
     return True  # LARGE fits all
 
 TURNAROUND_MIN = 45
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def to_min(t):
+    """
+    Makes time comparison easier by changing timestamp to minutes after midnight
+    
+    Parameters -->
+        t : int flight time 
+    
+    Returns -->
+        int : minutes after midnight
+    """
     t = str(int(t)).zfill(4)
     return int(t[:2]) * 60 + int(t[2:])
 
@@ -76,6 +108,14 @@ def to_timestamp(date, minutes):
     return datetime(date.year, date.month, date.day) + timedelta(minutes=int(minutes))
 
 def get_day_flights(df, date, dow):
+    """
+    Filters the raw schedule df to valid flights on one specific calendar day
+
+    Parameters -->
+        df : pandas df containing raw schedule
+        date : PostgreSQL date 
+         
+    """
     mask = (
         (df["EffectiveDate"]    <= date) &
         (df["DiscontinuedDate"] >= date) &
@@ -168,6 +208,65 @@ def build_turns(df, date, dow, shared_gates=False):
 
     return turns
 
+
+def summarize_turns(turns):
+    conflicts = sum(1 for turn in turns if turn["conflict"])
+    scheduled = len(turns) - conflicts
+    avg_turnaround = (
+        sum(turn["turnaround_min"] for turn in turns) / len(turns)
+        if turns else 0
+    )
+    return {
+        "total_turns": len(turns),
+        "scheduled_turns": scheduled,
+        "conflicts": conflicts,
+        "avg_turnaround": avg_turnaround,
+    }
+
+
+def choose_optimal_schedule(scenarios):
+    """
+    Prefer the scenario that schedules the most flights at real gates.
+    Break ties by fewer conflicts, then lower average turnaround time.
+    """
+    scored = []
+    for scenario in scenarios:
+        metrics = summarize_turns(scenario["turns"])
+        scored.append({**scenario, "metrics": metrics})
+
+    return min(
+        scored,
+        key=lambda scenario: (
+            -scenario["metrics"]["scheduled_turns"],
+            scenario["metrics"]["conflicts"],
+            scenario["metrics"]["avg_turnaround"],
+        ),
+    )
+
+def export_turns_to_csv(turns, scenario_name, output_path):
+    rows = []
+    for turn in sorted(turns, key=lambda item: (item["date"], item["gate_id"], item["arr_min"])):
+        rows.append({
+            "date": turn["date"].strftime("%Y-%m-%d"),
+            "gate_id": "" if turn["conflict"] else turn["gate_id"],
+            "inbound_carrier": turn["in_carrier"],
+            "inbound_flight": turn["inbound_flight"],
+            "arrival_time": turn["arr_ts"].strftime("%Y-%m-%d %H:%M"),
+            "outbound_carrier": turn["out_carrier"],
+            "outbound_flight": turn["outbound_flight"],
+            "departure_time": turn["dep_ts"].strftime("%Y-%m-%d %H:%M"),
+            "aircraft": turn["aircraft"],
+            "size": turn["size"],
+            "turnaround_minutes": turn["turnaround_min"],
+            "cross_carrier": turn["cross_carrier"],
+            "scheduled_at_gate": not turn["conflict"],
+            "scenario": scenario_name,
+        })
+
+    output = Path(output_path)
+    pd.DataFrame(rows).to_csv(output, index=False)
+    return output.resolve()
+
 # ── Database write ────────────────────────────────────────────────────────────
 def write_scenario(cur, scenario_name, parameters, all_turns, airline_id_map):
     """Insert one scenario + all its flights and assignments."""
@@ -184,7 +283,6 @@ def write_scenario(cur, scenario_name, parameters, all_turns, airline_id_map):
     # 2. Insert flights + assignments
     flight_rows      = []
     assignment_rows  = []
-    flight_id_cursor = 1   # we'll use SERIAL so we track manually for batching
 
     # Fetch current max flight id to offset correctly
     cur.execute("SELECT COALESCE(MAX(id), 0) FROM flights;")
@@ -255,59 +353,81 @@ def run():
         turns_same.extend(  build_turns(df, date, dow, shared_gates=False))
         turns_shared.extend(build_turns(df, date, dow, shared_gates=True))
 
-    print(f"Scenario 1 turns: {len(turns_same):,}")
-    print(f"Scenario 2 turns: {len(turns_shared):,}")
-
-    # Connect and write
-    print("\nConnecting to database...")
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur  = conn.cursor()
-
-    # Get airline id map
-    cur.execute("SELECT carrier, id FROM airlines;")
-    airline_id_map = {row[0]: row[1] for row in cur.fetchall()}
-
-    # Clear existing scenario data
-    cur.execute("TRUNCATE TABLE flights_assignment RESTART IDENTITY CASCADE;")
-    cur.execute("TRUNCATE TABLE flights           RESTART IDENTITY CASCADE;")
-    cur.execute("TRUNCATE TABLE scenario_runs     RESTART IDENTITY CASCADE;")
-
-    print("\n--- Writing Scenario 1: Same-Carrier Gates ---")
-    write_scenario(
-        cur,
-        scenario_name="Scenario 1 — Same-Carrier Gate Assignment",
-        parameters={
-            "turnaround_min":  TURNAROUND_MIN,
-            "num_gates":       15,
-            "shared_gates":    False,
-            "priority":        "earliest_departure",
-            "date_range":      "2024-02-01 to 2025-01-31",
+    scenario_1 = {
+        "name": "Scenario 1 — Same-Carrier Gate Assignment",
+        "parameters": {
+            "turnaround_min": TURNAROUND_MIN,
+            "num_gates": 15,
+            "shared_gates": False,
+            "priority": "earliest_departure",
+            "date_range": "2024-02-01 to 2025-01-31",
         },
-        all_turns=turns_same,
-        airline_id_map=airline_id_map,
-    )
-
-    print("\n--- Writing Scenario 2: Shared Gates (cross-carrier, size-compatible) ---")
-    write_scenario(
-        cur,
-        scenario_name="Scenario 2 — Shared Gates (Cross-Carrier, Size-Compatible)",
-        parameters={
-            "turnaround_min":  TURNAROUND_MIN,
-            "num_gates":       15,
-            "shared_gates":    True,
-            "priority":        "shortest_turnaround_first",
-            "size_classes":    {"SMALL": [1,2,3,4], "MEDIUM": [5,6,7,8,9,10,11,12], "LARGE": [13,14,15]},
-            "date_range":      "2024-02-01 to 2025-01-31",
+        "turns": turns_same,
+    }
+    scenario_2 = {
+        "name": "Scenario 2 — Shared Gates (Cross-Carrier, Size-Compatible)",
+        "parameters": {
+            "turnaround_min": TURNAROUND_MIN,
+            "num_gates": 15,
+            "shared_gates": True,
+            "priority": "shortest_turnaround_first",
+            "size_classes": {"SMALL": [1, 2, 3, 4], "MEDIUM": [5, 6, 7, 8, 9, 10, 11, 12], "LARGE": [13, 14, 15]},
+            "date_range": "2024-02-01 to 2025-01-31",
         },
-        all_turns=turns_shared,
-        airline_id_map=airline_id_map,
-    )
+        "turns": turns_shared,
+    }
+    scenarios = [scenario_1, scenario_2]
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("\nAll done! Both scenarios written to database.")
-    print("Next: run 03_query_results.sql to verify and explore the data.")
+    for scenario in scenarios:
+        metrics = summarize_turns(scenario["turns"])
+        print(
+            f'{scenario["name"]}: {metrics["total_turns"]:,} turns, '
+            f'{metrics["scheduled_turns"]:,} gate assignments, '
+            f'{metrics["conflicts"]:,} conflicts, '
+            f'{metrics["avg_turnaround"]:.1f} avg turnaround minutes'
+        )
+
+    optimal = choose_optimal_schedule(scenarios)
+    output_path = export_turns_to_csv(optimal["turns"], optimal["name"], OUTPUT_CSV_PATH)
+
+    print(f"\nOptimal schedule selected: {optimal['name']}")
+    print(f"CSV exported to: {output_path}")
+
+    if psycopg2 is None:
+        print("\npsycopg2 is not installed, so database writes were skipped.")
+        return str(output_path)
+
+    try:
+        print("\nConnecting to database...")
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+
+        cur.execute("SELECT carrier, id FROM airlines;")
+        airline_id_map = {row[0]: row[1] for row in cur.fetchall()}
+
+        cur.execute("TRUNCATE TABLE flights_assignment RESTART IDENTITY CASCADE;")
+        cur.execute("TRUNCATE TABLE flights           RESTART IDENTITY CASCADE;")
+        cur.execute("TRUNCATE TABLE scenario_runs     RESTART IDENTITY CASCADE;")
+
+        for scenario in scenarios:
+            print(f"\n--- Writing {scenario['name']} ---")
+            write_scenario(
+                cur,
+                scenario_name=scenario["name"],
+                parameters=scenario["parameters"],
+                all_turns=scenario["turns"],
+                airline_id_map=airline_id_map,
+            )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("\nAll done! Scenarios written to database and optimal CSV exported.")
+    except Exception as exc:
+        print(f"\nDatabase write skipped due to error: {exc}")
+        print("The optimal CSV schedule was still generated successfully.")
+
+    return str(output_path)
 
 if __name__ == "__main__":
     run()

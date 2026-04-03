@@ -1,18 +1,28 @@
+#TODO: 1. have all tables dropped at the begining of pipeline when .csv is uploaded.
+#       2. populate raw_flights and flights
+#       3. populate flight_instances AFTER getting time range from html.
 import csv
 import io
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Depends, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from supabase import Client
 from db import get_supabase
-from expansion import expand_raw_flights_to_instances
+from expansion import expand_raw_flights_to_instances, replace_flights
 from powerBI import get_embed_config
-from turnaround import run_turnaround_scenarios
+from turnaround import build_and_store_optimal_schedule, export_optimal_schedule_csv, run_turnaround_scenarios
 
 app = FastAPI()
+GENERATED_DIR = Path(__file__).resolve().parent / "generated"
+OPTIMAL_SCHEDULE_CSV = GENERATED_DIR / "optimal_flight_schedule.csv"
+RAW_TABLE_NAME = "raw_flights_test"
+NORMALIZED_TABLE_NAME = "flights_test"
+EXPANDED_TABLE_NAME = "flight_instances_test"
 
 # Allow React dev server
 # origins = [
@@ -45,6 +55,7 @@ class ScenarioRunRequest(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     turnaround_min: int = 45
+    replace_existing: bool = True
 
 
 RAW_FLIGHT_COLUMNS = [
@@ -118,6 +129,52 @@ def parse_raw_flights_csv(contents: bytes) -> list[dict]:
     return rows
 
 
+def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
+    def delete_all_rows(table_name: str, pk_column: str = "id", batch_size: int = 1000) -> None:
+        while True:
+            batch = (
+                supabase.table(table_name)
+                .select(pk_column)
+                .order(pk_column)
+                .limit(batch_size)
+                .execute()
+            ).data or []
+            if not batch:
+                break
+
+            ids = [row[pk_column] for row in batch]
+            supabase.table(table_name).delete().in_(pk_column, ids).execute()
+
+            remaining = (
+                supabase.table(table_name)
+                .select(pk_column)
+                .in_(pk_column, ids)
+                .limit(1)
+                .execute()
+            ).data or []
+            if remaining:
+                raise RuntimeError(
+                    f"Failed to clear dependent table '{table_name}'. "
+                    "The backend may be using insufficient Supabase permissions or blocked by RLS."
+                )
+
+    # Clear dependent tables first so raw_flights_test can be safely replaced.
+    # delete_all_rows("flight_instances_test")
+    # delete_all_rows("flights_assignment_test")
+    # delete_all_rows("scenario_runs_test")
+    delete_all_rows("flights_test")
+    delete_all_rows("raw_flights_test")
+
+    inserted_count = 0
+    batch_size = 500
+    for index in range(0, len(rows), batch_size):
+        batch = rows[index:index + batch_size]
+        inserted = supabase.table("raw_flights_test").insert(batch).execute().data or []
+        inserted_count += len(inserted)
+    return inserted_count
+
+# TODO: function deprecated, uploads .csv directly instead of going through pipeline 
+@app.post("/api/upload-raw-data")
 @app.post("/upload-raw-data")
 async def upload_raw_data(
     file: UploadFile = File(...),
@@ -133,7 +190,7 @@ async def upload_raw_data(
     Returns -->
         message and filename, raw_flights is populated with data from .csv
     """
-    if not file.filename or not file.filename.lower().endswith(".csv"):
+    if not file.filename or not  file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
 
     contents = await file.read()
@@ -142,15 +199,12 @@ async def upload_raw_data(
     if not rows:
         raise HTTPException(status_code=400, detail="Uploaded CSV contains no data rows.")
 
-    # TODO: change raw_flights_test to raw_flights
-    supabase.table("raw_flights_test").delete().neq("Carrier", "").execute()
-
-    result = supabase.table("raw_flights_test").insert(rows).execute()
+    inserted_count = replace_raw_flights_table(supabase, rows)
 
     return {
         "message": "Raw CSV uploaded to raw_flights.",
         "file_name": file.filename,
-        # "rows_inserted": len(result.data or []),
+        "rows_inserted": inserted_count,
     }
 
 ''' 
@@ -183,7 +237,7 @@ Output:
 '''
 @app.get("/flights")
 def get_flights(supabase: Client = Depends(get_supabase)):
-    res = supabase.table("flight_instances").select("*").execute()
+    res = supabase.table(EXPANDED_TABLE_NAME).select("*").execute()
     return res.data
 
 @app.post("/expansion/run")
@@ -199,9 +253,7 @@ def run_expansion(
             replace_existing=request.replace_existing,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to expand raw flights into flight_instances: {exc}") from exc
-
-@app.post("expansion/upload")
+        raise HTTPException(status_code=500, detail=f"Failed to expand {NORMALIZED_TABLE_NAME} into {EXPANDED_TABLE_NAME}: {exc}") from exc
 
 @app.post("/scenarios/run")
 def run_scenarios(
@@ -214,9 +266,82 @@ def run_scenarios(
             start_date=request.start_date,
             end_date=request.end_date,
             turnaround_min=request.turnaround_min,
+            replace_existing=request.replace_existing,
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to run turnaround scenarios from flight_instances: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Failed to run turnaround scenarios from {EXPANDED_TABLE_NAME}: {exc}") from exc
+
+
+@app.post("/pipeline/upload-and-run")
+async def upload_and_run_pipeline(
+    file: UploadFile = File(...),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    turnaround_min: int = 45,
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Clean pipeline:
+    upload CSV -> raw_flights_test -> flights_test -> flight_instances -> schedule tables -> downloadable CSV
+    """
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a CSV file.")
+
+    try:
+        contents = await file.read()
+        rows = parse_raw_flights_csv(contents)
+        if not rows:
+            raise HTTPException(status_code=400, detail="Uploaded CSV contains no data rows.")
+
+        raw_inserted = replace_raw_flights_table(supabase, rows)
+        normalization_result = replace_flights(supabase)
+        expansion_result = expand_raw_flights_to_instances(
+            supabase,
+            start_date=start_date,
+            end_date=end_date,
+            replace_existing=True,
+        )
+
+        schedule_result = build_and_store_optimal_schedule(
+            supabase,
+            start_date=start_date,
+            end_date=end_date,
+            turnaround_min=turnaround_min,
+            replace_existing=True,
+        )
+
+        # TODO: Check 
+        optimal_turns = schedule_result.pop("optimal_turns", [])
+        if not optimal_turns:
+            raise HTTPException(status_code=404, detail="No optimal schedule could be generated from flight_instances.")
+
+        # TODO: Check
+        csv_path = export_optimal_schedule_csv(optimal_turns, OPTIMAL_SCHEDULE_CSV)
+        return {
+            "message": "Pipeline completed successfully.",
+            "file_name": file.filename,
+            "raw_rows_inserted": raw_inserted,
+            "expansion": expansion_result,
+            "scheduling": schedule_result,
+            "schedule_csv_path": str(csv_path),
+            "download_url": "/downloads/optimal-flight-schedule.csv",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Pipeline failed: {exc}") from exc
+
+
+@app.get("/downloads/optimal-flight-schedule.csv")
+def download_optimal_schedule_csv():
+    if not OPTIMAL_SCHEDULE_CSV.exists():
+        raise HTTPException(status_code=404, detail="No generated schedule CSV is available yet.")
+
+    return FileResponse(
+        path=OPTIMAL_SCHEDULE_CSV,
+        media_type="text/csv",
+        filename="optimal_flight_schedule.csv",
+    )
 
 
 @app.get("/powerbi/optimized-schedule")
@@ -230,7 +355,7 @@ def get_powerbi_optimized_schedule(
     """
     if scenario_id is None:
         scenario_res = (
-            supabase.table("scenario_runs")
+            supabase.table("scenario_runs_test")
             .select("id,name,created_at,parameters")
             .order("created_at", desc=True)
             .limit(1)
@@ -241,7 +366,7 @@ def get_powerbi_optimized_schedule(
         scenario = scenario_res.data[0]
     else:
         scenario_res = (
-            supabase.table("scenario_runs")
+            supabase.table("scenario_runs_test")
             .select("id,name,created_at,parameters")
             .eq("id", scenario_id)
             .limit(1)
@@ -252,7 +377,7 @@ def get_powerbi_optimized_schedule(
         scenario = scenario_res.data[0]
 
     assignments_res = (
-        supabase.table("flights_assignment")
+        supabase.table("flights_assignment_test")
         .select("id,flight_id,gate_id,scenario_id,is_conflict,assigned_at")
         .eq("scenario_id", scenario["id"])
         .order("flight_id")
@@ -268,7 +393,7 @@ def get_powerbi_optimized_schedule(
 
     flight_ids = sorted({assignment["flight_id"] for assignment in assignments})
     flights_res = (
-        supabase.table("flights")
+        supabase.table("flights_test")
         .select("id,flight_number,arrival_time,departure_time,airline_id,turnaround_minutes,raw_schedule_id")
         .in_("id", flight_ids)
         .execute()
