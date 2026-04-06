@@ -292,8 +292,10 @@
   background: linear-gradient(180deg, #162742 0%, #102038 100%);
   border: 1px solid rgba(160, 180, 220, 0.18);
   border-radius: 18px;
-  min-height: 680px;
+  min-height: 620px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .analytics-sample {
@@ -329,8 +331,17 @@
 
 .analytics-embed {
   width: 100%;
-  min-height: 680px;
+  min-height: 980px;
+  height: 980px;
   display: none;
+  flex: 1 1 auto;
+}
+
+.analytics-embed iframe {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 980px;
+  border: 0;
 }
 
     .region {
@@ -435,7 +446,7 @@
         <div>
           <div class="analytics-title">Operations Analytics</div>
           <div class="analytics-copy">
-            This page defaults to a sample analytics layout and automatically switches to the latest embedded Power BI dashboard when the embed configuration is available.
+            sample analytics
           </div>
         </div>
         <div class="analytics-status" id="analyticsStatus">Sample analytics view loaded.</div>
@@ -466,16 +477,12 @@
 
       <div class="analytics-panel">
         <div id="analyticsSample" class="analytics-sample">
-          <h3>Sample Power BI Landing State</h3>
-          <p>The embedded dashboard will appear here after the frontend requests the latest Power BI embed token from the backend.</p>
+          <h3>Sample Power BI</h3>
+          <p>Insert embedded dashboard here.</p>
           <div class="analytics-list">
             <div class="analytics-list-item">
-              <span>Latest schedule build</span>
+              <span>Latest schedule.</span>
               <strong id="sampleScheduleBuild">Not built yet</strong>
-            </div>
-            <div class="analytics-list-item">
-              <span>Source tables</span>
-              <strong>`raw_flights_test` -> `flights_test` -> `flight_instances_test`</strong>
             </div>
             <div class="analytics-list-item">
               <span>Analytics source</span>
