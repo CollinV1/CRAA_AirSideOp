@@ -1,6 +1,3 @@
-#TODO: 1. have all tables dropped at the begining of pipeline when .csv is uploaded.
-#       2. populate raw_flights and flights
-#       3. populate flight_instances AFTER getting time range from html.
 import csv
 import io
 from datetime import date
@@ -18,6 +15,8 @@ from powerBI import get_embed_config
 from turnaround import build_and_store_optimal_schedule, export_optimal_schedule_csv, run_turnaround_scenarios
 
 app = FastAPI()
+
+# TODO
 GENERATED_DIR = Path(__file__).resolve().parent / "generated"
 OPTIMAL_SCHEDULE_CSV = GENERATED_DIR / "optimal_flight_schedule.csv"
 RAW_TABLE_NAME = "raw_flights_test"
@@ -45,19 +44,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# TODO
 class ExpansionRequest(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     replace_existing: bool = True
 
-
+# TODO
 class ScenarioRunRequest(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     turnaround_min: int = 45
     replace_existing: bool = True
 
-
+# TODO
 RAW_FLIGHT_COLUMNS = [
     "Carrier",
     "FlightNumber",
@@ -71,6 +71,7 @@ RAW_FLIGHT_COLUMNS = [
     "ArrivalTime",
     "SubAircraftTypeCode",
 ]
+
 
 def parse_raw_flights_csv(contents: bytes) -> list[dict]:
     """
@@ -130,6 +131,17 @@ def parse_raw_flights_csv(contents: bytes) -> list[dict]:
 
 
 def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
+    '''
+    Clears raw_flights tables and populates them with new .csv data.
+    Calls Supabase defined function: public.reset_tables
+
+    Parameters -->
+        Supabase Client
+        list[dict]: incoming .csv data  
+        
+    Returns -->
+        int: number of rows entered
+    '''
     # function public.reset_tables defined in Supabase
     supabase.rpc("reset_tables").execute()
 
@@ -141,39 +153,6 @@ def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
         inserted_count += len(inserted)
     return inserted_count
 
-# TODO: function deprecated, uploads .csv directly instead of going through pipeline 
-@app.post("/api/upload-raw-data")
-@app.post("/upload-raw-data")
-async def upload_raw_data(
-    file: UploadFile = File(...),
-    supabase: Client = Depends(get_supabase),
-):
-    """
-    Updates raw_flights
-
-    Parameters -->
-        file: .csv file user wishes to upload
-        supabase: calls get_supabase to get client
-
-    Returns -->
-        message and filename, raw_flights is populated with data from .csv
-    """
-    if not file.filename or not  file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Please upload a CSV file.")
-
-    contents = await file.read()
-    rows = parse_raw_flights_csv(contents)
-
-    if not rows:
-        raise HTTPException(status_code=400, detail="Uploaded CSV contains no data rows.")
-
-    inserted_count = replace_raw_flights_table(supabase, rows)
-
-    return {
-        "message": "Raw CSV uploaded to raw_flights.",
-        "file_name": file.filename,
-        "rows_inserted": inserted_count,
-    }
 
 ''' 
 TODO: PowerBI Embedded link
@@ -338,7 +317,7 @@ def download_optimal_schedule_csv():
         filename="optimal_flight_schedule.csv",
     )
 
-
+# TODO
 @app.get("/powerbi/optimized-schedule")
 def get_powerbi_optimized_schedule(
     scenario_id: Optional[int] = None,
@@ -440,8 +419,3 @@ def get_powerbi_optimized_schedule(
     }
 
 
-' ============================== '
-
-@app.get("/hello")
-def read_root():
-    return {"message": "Hello from FastAPI"}
