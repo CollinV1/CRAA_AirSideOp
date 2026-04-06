@@ -181,6 +181,18 @@
   justify-content: center;
 }
 
+.build-status {
+  margin-top: 12px;
+  text-align: center;
+  color: #bfd0ef;
+  font-size: 14px;
+  min-height: 20px;
+}
+
+.build-status a {
+  color: #9fc2ff;
+}
+
 .range-controls {
   margin-top: 18px;
   display: flex;
@@ -437,6 +449,7 @@
   <div class="upload-actions">
     <button id="buildScheduleBtn" class="build-btn" disabled>Build Schedule For Selected Day</button>
   </div>
+  <div id="buildStatusText" class="build-status">Schedule has not been built yet.</div>
 </div>
 </div>
 </div>
@@ -765,6 +778,7 @@ const csvFileInput = document.getElementById("csvFileInput");
 const buildScheduleBtn = document.getElementById("buildScheduleBtn");
 const startDateInput = document.getElementById("startDateInput");
 const endDateInput = document.getElementById("endDateInput");
+const buildStatusText = document.getElementById("buildStatusText");
 
 csvDropZone.addEventListener("click", () => {
   csvFileInput.click();
@@ -817,6 +831,7 @@ async function handleCSVFile(file) {
 
   title.textContent = `Loaded: ${uploadedCSV.name}`;
   subtitle.textContent = "Uploading and normalizing...";
+  buildStatusText.textContent = "Schedule has not been built yet.";
   buildScheduleBtn.disabled = true;
 
   // file sent to the backend
@@ -837,7 +852,7 @@ async function handleCSVFile(file) {
     const result = await response.json();
     uploadedNormalized = true;
     buildScheduleBtn.disabled = false;
-    subtitle.textContent = "Upload complete.";
+    subtitle.textContent = "Upload complete. Ready to build a schedule.";
     sampleScheduleBuild.textContent = "Raw and normalized tables refreshed";
     console.log("Backend result: ", result);
   } catch (error) {
@@ -845,6 +860,7 @@ async function handleCSVFile(file) {
     subtitle.textContent = "Upload failed";
     uploadedNormalized = false;
     buildScheduleBtn.disabled = true;
+    buildStatusText.textContent = "Schedule has not been built yet.";
   }
 }
 
@@ -862,10 +878,8 @@ function syncRangeInputsFromSelector() {
 }
 
 async function buildScheduleForSelectedDay() {
-  const subtitle = csvDropZone.querySelector(".upload-subtitle");
-
   if (!uploadedNormalized) {
-    subtitle.textContent = "Upload a CSV first.";
+    buildStatusText.textContent = "Upload a CSV first.";
     return;
   }
 
@@ -873,16 +887,16 @@ async function buildScheduleForSelectedDay() {
   const endDate = endDateInput.value;
 
   if (!startDate || !endDate) {
-    subtitle.textContent = "Choose both a start date and an end date.";
+    buildStatusText.textContent = "Choose both a start date and an end date.";
     return;
   }
 
   if (startDate > endDate) {
-    subtitle.textContent = "Start date must be on or before end date.";
+    buildStatusText.textContent = "Start date must be on or before end date.";
     return;
   }
 
-  subtitle.textContent = "Building schedule...";
+  buildStatusText.textContent = "Building schedule...";
   buildScheduleBtn.disabled = true;
 
   try {
@@ -903,14 +917,14 @@ async function buildScheduleForSelectedDay() {
     }
 
     const result = await response.json();
-    subtitle.innerHTML = `Schedule ready for ${startDate} to ${endDate}. <a href="http://127.0.0.1:8000${result.download_url}" target="_blank" rel="noopener noreferrer">Download optimal schedule CSV</a>`;
+    buildStatusText.innerHTML = `Schedule ready for ${startDate} to ${endDate}. <a href="http://127.0.0.1:8000${result.download_url}" target="_blank" rel="noopener noreferrer">Download optimal schedule CSV</a>`;
     sampleScheduleBuild.textContent = `${startDate} to ${endDate}`;
     analyticsWindowValue.textContent = startDate === endDate ? "1 day" : `${startDate} → ${endDate}`;
     await loadAnalyticsSummary();
     console.log("Schedule build result:", result);
   } catch (error) {
     console.error(error);
-    subtitle.textContent = "Schedule build failed";
+    buildStatusText.textContent = "Schedule build failed.";
   } finally {
     buildScheduleBtn.disabled = false;
   }

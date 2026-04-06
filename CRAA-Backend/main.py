@@ -55,8 +55,8 @@ class ExpansionRequest(BaseModel):
 
 # TODO Once ExpansionRequest is modified to expand only ona given range, modify to run scenario on the entire populated table resulting from expansion
 class ScenarioRunRequest(BaseModel):
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    start_date: date
+    end_date: date
     turnaround_min: int = 45
     replace_existing: bool = True
 
@@ -156,6 +156,11 @@ def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
         inserted_count += len(inserted)
     return inserted_count
 
+def replace_flight_instances_table(supabase: Client, rows: list[dict]):
+    '''
+    Clears flight instances
+    '''
+    supabase.rpc("reset_flight_instances").execute()
 
 @app.get("/get-embed-token")
 def get_embed_token():
@@ -224,9 +229,6 @@ def run_scenarios(
 @app.post("/pipeline/upload-and-run")
 async def upload_and_run_pipeline(
     file: UploadFile = File(...),
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    turnaround_min: int = 45,
     supabase: Client = Depends(get_supabase),
 ):
     '''
@@ -272,6 +274,9 @@ def build_schedule_pipeline(
     flights_test -> flight_instances_test (for requested date range) -> schedule tables -> downloadable CSV
     """
     try:
+        if request.start_date > request.end_date:
+            raise HTTPException(status_code=400, detail="start_date must be on or before end_date.")
+
         expansion_result = expand_raw_flights_to_instances(
             supabase,
             start_date=request.start_date,
@@ -423,5 +428,4 @@ def get_powerbi_optimized_schedule(
         "count": len(rows),
         "data": rows,
     }
-
 
