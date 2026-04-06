@@ -44,20 +44,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO
+# TODO Currently expansion is done wholesale on the entire .csv --> modify so expansion is conducted only for the desired timeframe 
 class ExpansionRequest(BaseModel):
+    # date range for expansion individual expansion
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+
+    # whether to clear existing flight instances
     replace_existing: bool = True
 
-# TODO
+# TODO Once ExpansionRequest is modified to expand only ona given range, modify to run scenario on the entire populated table resulting from expansion
 class ScenarioRunRequest(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     turnaround_min: int = 45
     replace_existing: bool = True
 
-# TODO
+# defines column names for raw .csv, used for parsing raw flights
 RAW_FLIGHT_COLUMNS = [
     "Carrier",
     "FlightNumber",
@@ -149,23 +152,16 @@ def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
     batch_size = 500
     for index in range(0, len(rows), batch_size):
         batch = rows[index:index + batch_size]
-        inserted = supabase.table("raw_flights_test").insert(batch).execute().data or []
+        inserted = supabase.table(RAW_TABLE_NAME).insert(batch).execute().data or []
         inserted_count += len(inserted)
     return inserted_count
 
 
-''' 
-TODO: PowerBI Embedded link
-
-Dependencies: MSAL, requests
-Purpose: Create PowerBI endpoint callable by frontend
-Output: json embedToken + embedURL 
-
-'''
-
-
 @app.get("/get-embed-token")
 def get_embed_token():
+    '''
+    Retrievies the embed token. Calls get_embed_config() defined in powerBI.py
+    '''
     try:
         return get_embed_config()
     except ValueError as exc:
@@ -184,6 +180,9 @@ Output:
 '''
 @app.get("/flights")
 def get_flights(supabase: Client = Depends(get_supabase)):
+    '''
+    Skeleton function for retreiving flight information from Supabase
+    '''
     res = supabase.table(EXPANDED_TABLE_NAME).select("*").execute()
     return res.data
 
@@ -192,6 +191,9 @@ def run_expansion(
     request: ExpansionRequest,
     supabase: Client = Depends(get_supabase),
 ):
+    '''
+    Expands flight information. NORMALIZED_TABLE_NAME (flights) into EXPANDED_TABLE_NAME (flight_instances)
+    '''
     try:
         return expand_raw_flights_to_instances(
             supabase,
@@ -227,10 +229,14 @@ async def upload_and_run_pipeline(
     turnaround_min: int = 45,
     supabase: Client = Depends(get_supabase),
 ):
-    """
-    Upload pipeline only:
-    upload CSV -> raw_flights_test -> flights_test
-    """
+    '''
+    Upload pipeline
+    user uploads .csv --> raw_flights_test populated --> flights_test populated 
+
+    TODO: automate pipeline to include
+    --> user selects date range --> flight_instances populated --> flight_connections populated --> schedule scenario build --> data sent to supabase
+    '''
+
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Please upload a CSV file.")
 
