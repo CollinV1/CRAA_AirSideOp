@@ -338,8 +338,11 @@ def run_turnaround_scenarios(
         },
     }
 
-
+# called in main.py
 def export_optimal_schedule_csv(turns: list[dict], output_path: str | Path) -> Path:
+    '''
+    Generate a .csv that stores the optimal schedule
+    '''
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -390,6 +393,7 @@ def build_and_store_optimal_schedule(
     turnaround_min: int = 45,
     replace_existing: bool = True,
 ) -> dict:
+    
     instances = fetch_flight_instances(supabase, start_date=start_date, end_date=end_date)
     if not instances:
         return {

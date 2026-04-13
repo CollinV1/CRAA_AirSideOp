@@ -23,15 +23,6 @@ RAW_TABLE_NAME = "raw_flights_test"
 NORMALIZED_TABLE_NAME = "flights_test"
 EXPANDED_TABLE_NAME = "flight_instances_test"
 
-# Allow React dev server
-# origins = [
-#     "http://localhost:5173",
-#     "http://127.0.0.1:5173",
-#     "http://127.0.0.1:5500",
-#     "http://localhost:5500",
-#     "null",
-# ]
-
 # TODO: modify allow_origins to be safer, not allow all links, purely for testing
 
 app.add_middleware(
@@ -156,12 +147,17 @@ def replace_raw_flights_table(supabase: Client, rows: list[dict]) -> int:
         inserted_count += len(inserted)
     return inserted_count
 
-def replace_flight_instances_table(supabase: Client, rows: list[dict]):
+def replace_flight_instances_table(supabase: Client):
     '''
     Clears flight instances
+    Calls Supabase defined function: public.reset_flight_instances
+
+    Parameters -->
+        Supabase Client
     '''
     supabase.rpc("reset_flight_instances").execute()
 
+# called by frontend
 @app.get("/get-embed-token")
 def get_embed_token():
     '''
@@ -225,7 +221,7 @@ def run_scenarios(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to run turnaround scenarios from {EXPANDED_TABLE_NAME}: {exc}") from exc
 
-
+# called by frontend
 @app.post("/pipeline/upload-and-run")
 async def upload_and_run_pipeline(
     file: UploadFile = File(...),
@@ -263,7 +259,7 @@ async def upload_and_run_pipeline(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Pipeline failed: {exc}") from exc
 
-
+# called by frontend 
 @app.post("/pipeline/build-schedule")
 def build_schedule_pipeline(
     request: ScenarioRunRequest,
@@ -284,6 +280,7 @@ def build_schedule_pipeline(
             replace_existing=True,
         )
 
+        # 
         schedule_result = build_and_store_optimal_schedule(
             supabase,
             start_date=request.start_date,
@@ -292,10 +289,12 @@ def build_schedule_pipeline(
             replace_existing=request.replace_existing,
         )
 
+        # computed schedule
         optimal_turns = schedule_result.pop("optimal_turns", [])
         if not optimal_turns:
             raise HTTPException(status_code=404, detail="No optimal schedule could be generated from flight_instances_test.")
 
+        #
         csv_path = export_optimal_schedule_csv(optimal_turns, OPTIMAL_SCHEDULE_CSV)
         return {
             "message": "Schedule build completed successfully.",
@@ -328,6 +327,7 @@ def download_optimal_schedule_csv():
         filename="optimal_flight_schedule.csv",
     )
 
+# called by frontend
 # TODO
 @app.get("/powerbi/optimized-schedule")
 def get_powerbi_optimized_schedule(
