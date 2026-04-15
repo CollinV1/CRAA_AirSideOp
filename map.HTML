@@ -343,8 +343,8 @@
 
 .analytics-embed {
   width: 100%;
-  min-height: 980px;
-  height: 980px;
+  min-height: 700px;
+  height: 700px;
   display: none;
   flex: 1 1 auto;
 }
@@ -352,7 +352,7 @@
 .analytics-embed iframe {
   width: 100% !important;
   height: 100% !important;
-  min-height: 980px;
+  min-height: 700px;
   border: 0;
 }
 
@@ -447,7 +447,7 @@
     </label>
   </div>
   <div class="upload-actions">
-    <button id="buildScheduleBtn" type="button" class="build-btn" disabled>Build Schedule For Date Range</button>
+    <button id="buildScheduleBtn" type="button" class="build-btn" disabled>Build Schedule</button>
   </div>
   <div id="buildStatusText" class="build-status">Schedule has not been built yet.</div>
 </div>
@@ -462,7 +462,7 @@
             sample analytics
           </div>
         </div>
-        <div class="analytics-status" id="analyticsStatus">Sample analytics view loaded.</div>
+        <!-- <div class="analytics-status" id="analyticsStatus">Sample analytics view loaded.</div> -->
       </div>
 
       <div class="analytics-grid">
@@ -980,7 +980,7 @@ async function loadAnalyticsSummary() {
 }
 
 async function loadPowerBIAnalytics(forceReload = false) {
-  analyticsStatus.textContent = "Loading Power BI analytics...";
+  // analyticsStatus.textContent = "Loading Power BI analytics...";
 
   try {
     const response = await fetch("http://127.0.0.1:8000/get-embed-token");
@@ -1023,12 +1023,12 @@ async function loadPowerBIAnalytics(forceReload = false) {
     });
 
     analyticsLoaded = true;
-    analyticsStatus.textContent = "Default Power BI report loaded.";
+    // analyticsStatus.textContent = "Default Report.";
   } catch (error) {
     console.error("Power BI load failed:", error);
     analyticsLoaded = false;
     embeddedPowerBIReport = null;
-    analyticsStatus.textContent = "Power BI analytics unavailable. Showing sample analytics view.";
+    analyticsStatus.textContent = "Sample Analytics";
     analyticsSample.style.display = "block";
     powerbiContainer.style.display = "none";
   }
