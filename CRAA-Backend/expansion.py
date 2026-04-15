@@ -84,6 +84,23 @@ def daterange(start_date: date, end_date: date) -> Iterable[date]:
         current += timedelta(days=1)
 
 
+def infer_schedule_window(normalized_rows: list[dict]) -> tuple[date, date]:
+    if not normalized_rows:
+        return DEFAULT_START_DATE, DEFAULT_END_DATE
+
+    start_candidates = [date.fromisoformat(str(row["effective_date"])) for row in normalized_rows if row.get("effective_date")]
+    end_candidates = [
+        date.fromisoformat(str(row["discontinued_date"])) if row.get("discontinued_date")
+        else date.fromisoformat(str(row["effective_date"]))
+        for row in normalized_rows if row.get("effective_date")
+    ]
+
+    if not start_candidates or not end_candidates:
+        return DEFAULT_START_DATE, DEFAULT_END_DATE
+
+    return min(start_candidates), max(end_candidates)
+
+
 def combine_flight_datetime(flight_date: date, hhmm_value: str | int) -> datetime:
     return datetime.combine(flight_date, parse_hhmm(hhmm_value))
 
@@ -148,15 +165,16 @@ def expand_raw_flights_to_instances(
     end_date: date | None = None,
     replace_existing: bool = True,
 ) -> dict:
-    params_start_date = start_date or DEFAULT_START_DATE
-    params_end_date = end_date or DEFAULT_END_DATE
-
     normalized_rows = (
         supabase.table(NORMALIZED_TABLE_NAME)
         .select("*")
         .order("id")
         .execute()
     ).data or []
+
+    inferred_start_date, inferred_end_date = infer_schedule_window(normalized_rows)
+    params_start_date = start_date or inferred_start_date
+    params_end_date = end_date or inferred_end_date
 
     if replace_existing:
             supabase.table(EXPANDED_TABLE_NAME).delete().neq("id", 0).execute()

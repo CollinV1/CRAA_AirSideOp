@@ -376,9 +376,9 @@
 <div class="Header">
     <!-- Get the gate and dash buttons on the left, everything else on the right -->
   <div class="left header">
-  <button id="mapBtn" class="nav-btn active">✈︎ Gate View</button>
-  <button id="dashboardBtn" class="nav-btn"> 🗎 Dashboard</button>
-  <button id="analyticsBtn" class="nav-btn">▣ Analytics</button>
+  <button id="mapBtn" type="button" class="nav-btn active">✈︎ Gate View</button>
+  <button id="dashboardBtn" type="button" class="nav-btn"> 🗎 Dashboard</button>
+  <button id="analyticsBtn" type="button" class="nav-btn">▣ Analytics</button>
   </div>
 
   <div class="date-bar">
@@ -439,15 +439,15 @@
   <div class="range-controls">
     <label class="range-field">
       <span>Start Date</span>
-      <input id="startDateInput" type="date" value="2026-04-01" />
+      <input id="startDateInput" type="date" value="2024-02-15" />
     </label>
     <label class="range-field">
       <span>End Date</span>
-      <input id="endDateInput" type="date" value="2026-04-01" />
+      <input id="endDateInput" type="date" value="2024-02-15" />
     </label>
   </div>
   <div class="upload-actions">
-    <button id="buildScheduleBtn" class="build-btn" disabled>Build Schedule For Selected Day</button>
+    <button id="buildScheduleBtn" type="button" class="build-btn" disabled>Build Schedule For Date Range</button>
   </div>
   <div id="buildStatusText" class="build-status">Schedule has not been built yet.</div>
 </div>
@@ -779,6 +779,7 @@ const buildScheduleBtn = document.getElementById("buildScheduleBtn");
 const startDateInput = document.getElementById("startDateInput");
 const endDateInput = document.getElementById("endDateInput");
 const buildStatusText = document.getElementById("buildStatusText");
+let embeddedPowerBIReport = null;
 
 csvDropZone.addEventListener("click", () => {
   csvFileInput.click();
@@ -853,14 +854,15 @@ async function handleCSVFile(file) {
     uploadedNormalized = true;
     buildScheduleBtn.disabled = false;
     subtitle.textContent = "Upload complete. Ready to build a schedule.";
+    buildStatusText.textContent = "CSV uploaded and stored successfully.";
     sampleScheduleBuild.textContent = "Raw and normalized tables refreshed";
     console.log("Backend result: ", result);
   } catch (error) {
     console.error(error);
-    subtitle.textContent = "Upload failed";
+    subtitle.textContent = `Upload failed: ${error.message}`;
     uploadedNormalized = false;
     buildScheduleBtn.disabled = true;
-    buildStatusText.textContent = "Schedule has not been built yet.";
+    buildStatusText.textContent = `Upload failed: ${error.message}`;
   }
 }
 
@@ -877,7 +879,11 @@ function syncRangeInputsFromSelector() {
   if (!endDateInput.value) endDateInput.value = selectedDate;
 }
 
-async function buildScheduleForSelectedDay() {
+async function buildScheduleForSelectedDay(event) {
+  if (event) {
+    event.preventDefault();
+  }
+
   if (!uploadedNormalized) {
     buildStatusText.textContent = "Upload a CSV first.";
     return;
@@ -921,6 +927,9 @@ async function buildScheduleForSelectedDay() {
     sampleScheduleBuild.textContent = `${startDate} to ${endDate}`;
     analyticsWindowValue.textContent = startDate === endDate ? "1 day" : `${startDate} → ${endDate}`;
     await loadAnalyticsSummary();
+    if (analyticsLoaded) {
+      analyticsStatus.textContent = "Schedule updated. Refresh the embedded report from the Analytics tab if needed.";
+    }
     console.log("Schedule build result:", result);
   } catch (error) {
     console.error(error);
@@ -970,7 +979,7 @@ async function loadAnalyticsSummary() {
   }
 }
 
-async function loadPowerBIAnalytics() {
+async function loadPowerBIAnalytics(forceReload = false) {
   analyticsStatus.textContent = "Loading Power BI analytics...";
 
   try {
@@ -989,8 +998,15 @@ async function loadPowerBIAnalytics() {
     powerbiContainer.style.display = "block";
     analyticsSample.style.display = "none";
 
+    if (forceReload && embeddedPowerBIReport) {
+      await embeddedPowerBIReport.reload();
+      analyticsLoaded = true;
+      analyticsStatus.textContent = "Power BI report refreshed with the latest generated schedule.";
+      return;
+    }
+
     window.powerbi.reset(powerbiContainer);
-    window.powerbi.embed(powerbiContainer, {
+    embeddedPowerBIReport = window.powerbi.embed(powerbiContainer, {
       type: "report",
       tokenType: models.TokenType.Embed,
       accessToken: embedConfig.embedToken,
@@ -1007,10 +1023,11 @@ async function loadPowerBIAnalytics() {
     });
 
     analyticsLoaded = true;
-    analyticsStatus.textContent = "Live Power BI analytics loaded from the latest database-backed report.";
+    analyticsStatus.textContent = "Default Power BI report loaded.";
   } catch (error) {
     console.error("Power BI load failed:", error);
     analyticsLoaded = false;
+    embeddedPowerBIReport = null;
     analyticsStatus.textContent = "Power BI analytics unavailable. Showing sample analytics view.";
     analyticsSample.style.display = "block";
     powerbiContainer.style.display = "none";
@@ -1030,7 +1047,7 @@ function populateYears() {
     const option = document.createElement("option");
     option.value = year;
     option.textContent = year;
-    if (year === 2026) option.selected = true;
+    if (year === 2024) option.selected = true;
     yearSelect.appendChild(option);
   }
 }
@@ -1105,6 +1122,9 @@ function updateDateDisplay() {
 populateYears();
 populateTimes();
 populateDays();
+monthSelect.value = "1";
+daySelect.value = "15";
+yearSelect.value = "2024";
 updateDateDisplay();
 syncRangeInputsFromSelector();
 

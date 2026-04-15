@@ -17,9 +17,10 @@ SIZE_MAP = {
 }
 
 GATE_CONFIG = (
-    [(str(g), "SMALL") for g in range(1, 5)] +
-    [(str(g), "MEDIUM") for g in range(5, 13)] +
-    [(str(g), "LARGE") for g in range(13, 16)]
+    [("B1", "SMALL"), ("B2", "SMALL"), ("B3", "SMALL"), ("B4", "SMALL")] +
+    [("B5", "MEDIUM"), ("B6", "MEDIUM"), ("B7", "MEDIUM"), ("B8", "MEDIUM"),
+     ("B9", "MEDIUM"), ("B10", "MEDIUM"), ("B11", "MEDIUM"), ("B12", "MEDIUM")] +
+    [("A1", "LARGE"), ("A2", "LARGE"), ("A3", "LARGE"), ("A4", "LARGE"), ("A5", "LARGE")]
 )
 
 BATCH_SIZE = 500
@@ -195,7 +196,6 @@ def choose_optimal_schedule(scenarios: list[dict]) -> dict:
 
 def clear_existing_schedule_results(supabase: Client) -> None:
     supabase.table("flights_assignment_test").delete().neq("id", 0).execute()
-    supabase.table("flights_test").delete().neq("id", 0).execute()
     supabase.table("scenario_runs_test").delete().neq("id", 0).execute()
 
 

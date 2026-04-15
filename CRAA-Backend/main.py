@@ -1,5 +1,7 @@
 import csv
 import io
+import json
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -17,8 +19,9 @@ from turnaround import build_and_store_optimal_schedule, export_optimal_schedule
 app = FastAPI()
 
 # TODO
-GENERATED_DIR = Path(__file__).resolve().parent / "generated"
+GENERATED_DIR = Path(tempfile.gettempdir()) / "craa-operations-generated"
 OPTIMAL_SCHEDULE_CSV = GENERATED_DIR / "optimal_flight_schedule.csv"
+OPTIMAL_SCHEDULE_JSON = GENERATED_DIR / "optimal_flight_schedule.json"
 RAW_TABLE_NAME = "raw_flights_test"
 NORMALIZED_TABLE_NAME = "flights_test"
 EXPANDED_TABLE_NAME = "flight_instances_test"
@@ -156,6 +159,46 @@ def replace_flight_instances_table(supabase: Client):
         Supabase Client
     '''
     supabase.rpc("reset_flight_instances").execute()
+
+
+def save_generated_schedule_payload(turns: list[dict], start_date: date, end_date: date) -> None:
+    GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    for turn in sorted(turns, key=lambda row: (row["service_date"], row["gate_id"], row["arr_min"])):
+        rows.append({
+            "service_date": turn["service_date"].isoformat(),
+            "gate_id": turn["gate_id"],
+            "inbound_carrier": turn["inbound_carrier"],
+            "inbound_flight": turn["inbound_flight"],
+            "arrival_time": turn["arrival_time"].isoformat(),
+            "outbound_carrier": turn["outbound_carrier"],
+            "outbound_flight": turn["outbound_flight"],
+            "departure_time": turn["departure_time"].isoformat(),
+            "aircraft": turn["aircraft"],
+            "size": turn["size"],
+            "turnaround_minutes": turn["turnaround_minutes"],
+            "cross_carrier": turn["cross_carrier"],
+            "scheduled_at_gate": not turn["conflict"],
+            "is_conflict": 1 if turn["conflict"] else 0,
+        })
+
+    payload = {
+        "scenario": {
+            "name": f"Generated Schedule ({start_date.isoformat()} to {end_date.isoformat()})",
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+        },
+        "count": len(rows),
+        "data": rows,
+    }
+    OPTIMAL_SCHEDULE_JSON.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def load_generated_schedule_payload() -> dict:
+    if not OPTIMAL_SCHEDULE_JSON.exists():
+        raise HTTPException(status_code=404, detail="No generated schedule payload is available yet.")
+    return json.loads(OPTIMAL_SCHEDULE_JSON.read_text(encoding="utf-8"))
 
 # called by frontend
 @app.get("/get-embed-token")
@@ -296,13 +339,14 @@ def build_schedule_pipeline(
 
         #
         csv_path = export_optimal_schedule_csv(optimal_turns, OPTIMAL_SCHEDULE_CSV)
+        save_generated_schedule_payload(optimal_turns, request.start_date, request.end_date)
         return {
             "message": "Schedule build completed successfully.",
             "normalized_table": NORMALIZED_TABLE_NAME,
             "expanded_table": EXPANDED_TABLE_NAME,
             "date_range": {
-                "start_date": str(request.start_date) if request.start_date else None,
-                "end_date": str(request.end_date) if request.end_date else None,
+                "start_date": str(request.start_date),
+                "end_date": str(request.end_date),
             },
             "turnaround_min": request.turnaround_min,
             "expansion": expansion_result,
@@ -335,97 +379,8 @@ def get_powerbi_optimized_schedule(
     supabase: Client = Depends(get_supabase),
 ):
     """
-    Returns the canonical optimized gate schedule for Power BI.
-    If no scenario_id is provided, the most recently created scenario is used.
+    Returns the latest generated optimized gate schedule payload directly.
     """
-    if scenario_id is None:
-        scenario_res = (
-            supabase.table("scenario_runs")
-            .select("id,name,created_at,parameters")
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if not scenario_res.data:
-            raise HTTPException(status_code=404, detail="No optimized schedule found in scenario_runs.")
-        scenario = scenario_res.data[0]
-    else:
-        scenario_res = (
-            supabase.table("scenario_runs")
-            .select("id,name,created_at,parameters")
-            .eq("id", scenario_id)
-            .limit(1)
-            .execute()
-        )
-        if not scenario_res.data:
-            raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found.")
-        scenario = scenario_res.data[0]
-
-    assignments_res = (
-        supabase.table("flights_assignment_test")
-        .select("id,flight_id,gate_id,scenario_id,is_conflict,assigned_at")
-        .eq("scenario_id", scenario["id"])
-        .order("flight_id")
-        .execute()
-    )
-    assignments = assignments_res.data or []
-    if not assignments:
-        return {
-            "scenario": scenario,
-            "count": 0,
-            "data": [],
-        }
-
-    flight_ids = sorted({assignment["flight_id"] for assignment in assignments})
-    flights_res = (
-        supabase.table("flights")
-        .select("id,flight_number,arrival_time,departure_time,airline_id,turnaround_minutes,raw_schedule_id")
-        .in_("id", flight_ids)
-        .execute()
-    )
-    flights = {flight["id"]: flight for flight in (flights_res.data or [])}
-
-    gate_ids = sorted({assignment["gate_id"] for assignment in assignments if assignment.get("gate_id")})
-    gates = {}
-    if gate_ids:
-        gates_res = (
-            supabase.table("gates")
-            .select("id,concourse,is_active")
-            .in_("id", gate_ids)
-            .execute()
-        )
-        gates = {gate["id"]: gate for gate in (gates_res.data or [])}
-
-    rows = []
-    for assignment in assignments:
-        flight = flights.get(assignment["flight_id"])
-        if not flight:
-            continue
-        gate = gates.get(assignment["gate_id"], {})
-        rows.append({
-            "scenario_id": scenario["id"],
-            "scenario_name": scenario["name"],
-            "scenario_created_at": scenario["created_at"],
-            "assignment_id": assignment["id"],
-            "flight_id": assignment["flight_id"],
-            "flight_number": flight["flight_number"],
-            "airline_id": flight["airline_id"],
-            "arrival_time": flight["arrival_time"],
-            "departure_time": flight["departure_time"],
-            "turnaround_minutes": flight.get("turnaround_minutes"),
-            "raw_schedule_id": flight.get("raw_schedule_id"),
-            "gate_id": assignment["gate_id"],
-            "concourse": gate.get("concourse"),
-            "gate_is_active": gate.get("is_active"),
-            "is_conflict": assignment["is_conflict"],
-            "assigned_at": assignment["assigned_at"],
-        })
-
-    rows.sort(key=lambda row: (row["arrival_time"], row["gate_id"], row["flight_number"]))
-
-    return {
-        "scenario": scenario,
-        "count": len(rows),
-        "data": rows,
-    }
-
+    del scenario_id
+    del supabase
+    return load_generated_schedule_payload()
