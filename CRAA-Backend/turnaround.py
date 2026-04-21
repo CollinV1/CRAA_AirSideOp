@@ -39,7 +39,9 @@ def minutes_since_midnight(value: datetime) -> int:
     return value.hour * 60 + value.minute
 
 
-def parse_datetime(value: str) -> datetime:
+def parse_datetime(value: str | None) -> datetime | None:
+    if value in (None, "", "None"):
+        return None
     return datetime.fromisoformat(value)
 
 
@@ -68,6 +70,8 @@ def fetch_flight_instances(
     for row in rows:
         arrival_dt = parse_datetime(row["arrival_datetime"])
         departure_dt = parse_datetime(row["departure_datetime"])
+        if arrival_dt is None or departure_dt is None:
+            continue
         if start_date and arrival_dt.date() < start_date and departure_dt.date() < start_date:
             continue
         if end_date and arrival_dt.date() > end_date and departure_dt.date() > end_date:
@@ -83,6 +87,8 @@ def build_turns_for_day(instances: list[dict], service_date: date, turnaround_mi
     for row in instances:
         arrival_dt = parse_datetime(row["arrival_datetime"])
         departure_dt = parse_datetime(row["departure_datetime"])
+        if arrival_dt is None or departure_dt is None:
+            continue
         row_size = SIZE_MAP.get(str(row["subaircrafttypecode"]), "MEDIUM")
 
         if row["arrival_airport"] == "CHS" and arrival_dt.date() == service_date:

@@ -3,6 +3,8 @@ import "./App.css";
 import airportMap from "./assets/UpScaled.png";
 import chsLogo from "./assets/CHS.png"; 
 
+const API_BASE = "http://127.0.0.1:8000";
+
 const GATES = [
   { id: "B1", cx: 546, cy: 401, rx: 35, ry: 27.5, transform: "rotate(-27)" },
   { id: "B3", cx: 513, cy: 318, rx: 35, ry: 27.5, transform: "rotate(-27)" },
@@ -24,9 +26,9 @@ const GATES = [
 function App() {
   const [activeView, setActiveView] = useState("map");
 
-  const [month, setMonth] = useState(3);
+  const [month, setMonth] = useState(1);
   const [day, setDay] = useState(1);
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(2025);
   const [time, setTime] = useState("14:00");
 
   const [scheduleRows, setScheduleRows] = useState([]);
@@ -38,7 +40,9 @@ function App() {
   const [uploadedNormalized, setUploadedNormalized] = useState(false);
   const [dropZoneDragging, setDropZoneDragging] = useState(false);
 
-  const [startDate, setStartDate] = useState("2026-04-01");
+  const [playbackDate, setPlaybackDate] = useState("2025-01-01");
+  const [buildStartDate, setBuildStartDate] = useState("2025-01-01");
+  const [buildEndDate, setBuildEndDate] = useState("2025-01-01");
 
   const [buildStatus, setBuildStatus] = useState("Schedule has not been built yet.");
   const [uploadTitle, setUploadTitle] = useState("Drag and drop file or click to browse");
@@ -94,7 +98,9 @@ function App() {
 
   useEffect(() => {
     const nextSelectedDate = getSelectedDateIso();
-    setStartDate((prev) => prev || nextSelectedDate);
+    setPlaybackDate((prev) => prev || nextSelectedDate);
+    setBuildStartDate((prev) => prev || nextSelectedDate);
+    setBuildEndDate((prev) => prev || nextSelectedDate);
   }, [year, month, day]);
 
   useEffect(() => {
@@ -115,7 +121,7 @@ function App() {
   }, [clickedPoints]);
 
   async function loadGateStatusForSelectedTime(playbackTime = null) {
-    const response = await fetch("http://127.0.0.1:8000/powerbi/optimized-schedule");
+    const response = await fetch(`${API_BASE}/powerbi/optimized-schedule`);
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || "Failed to load optimized schedule.");
@@ -125,7 +131,7 @@ function App() {
     const rows = payload.data || [];
     setScheduleRows(rows);
 
-    const selectedDate = startDate;
+    const selectedDate = playbackDate;
     const selectedTime = playbackTime || (time.length === 5 ? `${time}:00` : time);
 
     const nextColors = {};
@@ -175,7 +181,7 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("http://127.0.0.1:8000/pipeline/upload-and-run", {
+      const response = await fetch(`${API_BASE}/pipeline/upload-and-run`, {
         method: "POST",
         body: formData
       });
@@ -205,8 +211,13 @@ function App() {
       return;
     }
 
-    if (!startDate) {
-      setBuildStatus("Choose a date.");
+    if (!buildStartDate || !buildEndDate) {
+      setBuildStatus("Choose both a start date and an end date.");
+      return;
+    }
+
+    if (buildStartDate > buildEndDate) {
+      setBuildStatus("Start date must be on or before end date.");
       return;
     }
 
@@ -216,15 +227,15 @@ function App() {
     setTimelineBounds(null);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/pipeline/build-schedule", {
+      const response = await fetch(`${API_BASE}/pipeline/build-schedule`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-          body: JSON.stringify({
-            start_date: startDate,
-            end_date: startDate
-          })
+        body: JSON.stringify({
+          start_date: buildStartDate,
+          end_date: buildEndDate
+        })
       });
 
       if (!response.ok) {
@@ -234,10 +245,10 @@ function App() {
 
       const result = await response.json();
       setBuildStatus(
-        `Schedule ready for ${startDate} to ${startDate}. Download: http://127.0.0.1:8000${result.download_url}`
+        `Schedule ready for ${buildStartDate}${buildStartDate === buildEndDate ? "" : ` to ${buildEndDate}`}. Download: ${API_BASE}${result.download_url}`
       );
-      setSampleScheduleBuild(startDate);      
-      setAnalyticsWindowValue(startDate);
+      setSampleScheduleBuild(buildStartDate === buildEndDate ? buildStartDate : `${buildStartDate} to ${buildEndDate}`);      
+      setAnalyticsWindowValue(buildStartDate === buildEndDate ? buildStartDate : `${buildStartDate} → ${buildEndDate}`);
       await loadAnalyticsSummary();
       await loadGateStatusForSelectedTime();
       console.log("Schedule build result:", result);
@@ -249,7 +260,7 @@ function App() {
 
   async function loadAnalyticsSummary() {
     try {
-      const response = await fetch("http://127.0.0.1:8000/powerbi/optimized-schedule");
+      const response = await fetch(`${API_BASE}/powerbi/optimized-schedule`);
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText);
@@ -291,7 +302,7 @@ function App() {
     setAnalyticsStatus("Loading Power BI analytics...");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/get-embed-token");
+      const response = await fetch(`${API_BASE}/get-embed-token`);
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText);
@@ -346,7 +357,7 @@ function App() {
 
   function startTimelinePlayback() {
     const rowsForDate = scheduleRows.filter(
-      (row) => row.service_date === startDate && row.scheduled_at_gate
+      (row) => row.service_date === playbackDate && row.scheduled_at_gate
     );
 
     if (!rowsForDate.length) {
@@ -398,7 +409,7 @@ function App() {
     loadGateStatusForSelectedTime(currentPlaybackTime).catch((error) => {
       console.error("Gate status playback failed:", error);
     });
-  }, [currentPlaybackTime, scheduleRows.length, startDate]);
+  }, [currentPlaybackTime, scheduleRows.length, playbackDate]);
 
   function handleSvgClick(e) {
     const svg = e.currentTarget;
@@ -430,7 +441,7 @@ function App() {
             className={`nav-btn ${activeView === "analytics" ? "active" : ""}`}
             onClick={handleAnalyticsViewClick}
           >
-            ▣ Analytics
+            Analytics
           </button>
         </div>
 
@@ -443,24 +454,24 @@ function App() {
           <div className="header-date-group">
 
           <button className="nav-btn timeline-btn" onClick={startTimelinePlayback}>
-            Play▶
+            Play ▶
           </button>
 
           <button className="nav-btn timeline-btn"onClick={stopTimelinePlayback}>
-            Pause❚❚
+            Pause ❚❚
           </button>
             <label>
-              <span>Date</span>
+              {/* <span>Date</span> */}
               <input
                 type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                value={playbackDate}
+                onChange={(e) => setPlaybackDate(e.target.value)}
               />
             </label>
 
 
             <label>
-              <span>Playback</span>
+              <span>Playback Date</span>
               <div style={{ color: "white", paddingTop: "6px", minWidth: "90px" }}>
                 {currentPlaybackTime ? formatPlaybackDisplay(currentPlaybackTime) : "--"}
               </div>
@@ -504,13 +515,33 @@ function App() {
               </div>
             </div>
 
+            <div className="range-controls">
+              <label className="range-field">
+                <span>Schedule Start</span>
+                <input
+                  type="date"
+                  value={buildStartDate}
+                  onChange={(e) => setBuildStartDate(e.target.value)}
+                />
+              </label>
+
+              <label className="range-field">
+                <span>Schedule End</span>
+                <input
+                  type="date"
+                  value={buildEndDate}
+                  onChange={(e) => setBuildEndDate(e.target.value)}
+                />
+              </label>
+            </div>
+
             <div className="upload-actions">
               <button
                 className="build-btn"
                 disabled={!uploadedNormalized}
                 onClick={buildScheduleForSelectedDay}
               >
-                Build Schedule For Selected Day
+                Build Schedule For Date Range
               </button>
             </div>
 

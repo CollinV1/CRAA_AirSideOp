@@ -9,12 +9,12 @@ from typing import Optional
 from fastapi import FastAPI, Depends, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from supabase import Client
 from db import get_supabase
 from expansion import expand_raw_flights_to_instances, replace_flights
 from powerBI import get_embed_config
-from turnaround import build_and_store_optimal_schedule, export_optimal_schedule_csv, run_turnaround_scenarios
+from turnaround_example import build_and_store_optimal_schedule, export_optimal_schedule_csv, run_turnaround_scenarios
 
 app = FastAPI()
 
@@ -49,10 +49,27 @@ class ExpansionRequest(BaseModel):
 
 # TODO Once ExpansionRequest is modified to expand only ona given range, modify to run scenario on the entire populated table resulting from expansion
 class ScenarioRunRequest(BaseModel):
-    start_date: date
-    end_date: date
+    schedule_date: Optional[date] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
     turnaround_min: int = 45
     replace_existing: bool = True
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if self.schedule_date is not None:
+            if self.start_date is None:
+                self.start_date = self.schedule_date
+            if self.end_date is None:
+                self.end_date = self.schedule_date
+
+        if self.start_date is None or self.end_date is None:
+            raise ValueError("Provide either schedule_date or both start_date and end_date.")
+
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date.")
+
+        return self
 
 # defines column names for raw .csv, used for parsing raw flights
 RAW_FLIGHT_COLUMNS = [
@@ -165,27 +182,43 @@ def save_generated_schedule_payload(turns: list[dict], start_date: date, end_dat
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
     rows = []
-    for turn in sorted(turns, key=lambda row: (row["service_date"], row["gate_id"], row["arr_min"])):
+    for turn in sorted(
+        turns,
+        key=lambda row: (
+            row.get("arrival_datetime") or "",
+            row.get("gate_id") or "",
+            row.get("arrival_id") or 0,
+        ),
+    ):
+        arrival_iso = turn.get("arrival_datetime")
+        departure_iso = turn.get("departure_datetime")
+        service_date = arrival_iso.split("T", 1)[0] if arrival_iso else None
+        status = turn.get("status")
         rows.append({
-            "service_date": turn["service_date"].isoformat(),
-            "gate_id": turn["gate_id"],
-            "inbound_carrier": turn["inbound_carrier"],
-            "inbound_flight": turn["inbound_flight"],
-            "arrival_time": turn["arrival_time"].isoformat(),
-            "outbound_carrier": turn["outbound_carrier"],
-            "outbound_flight": turn["outbound_flight"],
-            "departure_time": turn["departure_time"].isoformat(),
-            "aircraft": turn["aircraft"],
-            "size": turn["size"],
-            "turnaround_minutes": turn["turnaround_minutes"],
-            "cross_carrier": turn["cross_carrier"],
-            "scheduled_at_gate": not turn["conflict"],
-            "is_conflict": 1 if turn["conflict"] else 0,
+            "service_date": service_date,
+            "gate_id": turn.get("gate_id"),
+            "inbound_carrier": None,
+            "inbound_flight": turn.get("arrival_flight_number"),
+            "arrival_time": arrival_iso,
+            "outbound_carrier": None,
+            "outbound_flight": turn.get("departure_flight_number"),
+            "departure_time": departure_iso,
+            "aircraft": turn.get("subaircrafttypecode"),
+            "size": None,
+            "turnaround_minutes": turn.get("turnaround_minutes"),
+            "cross_carrier": False,
+            "scheduled_at_gate": status not in ("CONFLICT", "NO_DEPARTURE"),
+            "is_conflict": 1 if status == "CONFLICT" else 0,
+            "status": status,
+            "color": turn.get("color"),
+            "mgt_minutes": turn.get("mgt_minutes"),
+            "excess_minutes": turn.get("excess_minutes"),
+            "plane_id": turn.get("plane_id"),
         })
 
     payload = {
         "scenario": {
-            "name": f"Generated Schedule ({start_date.isoformat()} to {end_date.isoformat()})",
+            "name": f"Turnaround Example Schedule ({start_date.isoformat()} to {end_date.isoformat()})",
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
         },
@@ -313,9 +346,6 @@ def build_schedule_pipeline(
     flights_test -> flight_instances_test (for requested date range) -> schedule tables -> downloadable CSV
     """
     try:
-        if request.start_date > request.end_date:
-            raise HTTPException(status_code=400, detail="start_date must be on or before end_date.")
-
         expansion_result = expand_raw_flights_to_instances(
             supabase,
             start_date=request.start_date,
