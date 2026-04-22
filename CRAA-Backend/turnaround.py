@@ -19,9 +19,15 @@ SIZE_MAP = {
 GATE_CONFIG = (
     [("B1", "SMALL"), ("B2", "SMALL"), ("B3", "SMALL"), ("B4", "SMALL")] +
     [("B5", "MEDIUM"), ("B6", "MEDIUM"), ("B7", "MEDIUM"), ("B8", "MEDIUM"),
-     ("B9", "MEDIUM"), ("B10", "MEDIUM"), ("B11", "MEDIUM"), ("B12", "MEDIUM")] +
+     ("B9", "MEDIUM"), ("B10", "MEDIUM")] +
     [("A1", "LARGE"), ("A2", "LARGE"), ("A3", "LARGE"), ("A4", "LARGE"), ("A5", "LARGE")]
 )
+
+GATE_PREFERENCE = {
+    "SMALL": ["B1", "B2", "B3", "B4", "B5", "B6", "A1", "A2", "A3"],
+    "MEDIUM": ["B5", "B6", "B7", "B8", "B9", "B10", "A1", "A2", "A3", "A4", "A5"],
+    "LARGE": ["A1", "A2", "A3", "A4", "A5"],
+}
 
 BATCH_SIZE = 500
 EXPANDED_TABLE_NAME = "flight_instances_test"
@@ -33,6 +39,28 @@ def gate_fits(gate_type: str, size: str) -> bool:
     if gate_type == "MEDIUM":
         return size in ("SMALL", "MEDIUM")
     return True
+
+
+def candidate_gates_for_turn(size: str, gate_free: dict[str, int], gate_usage: dict[str, int], arrival_min: int) -> list[str]:
+    preference = GATE_PREFERENCE.get(size, [gate_id for gate_id, _ in GATE_CONFIG])
+    preference_rank = {gate_id: index for index, gate_id in enumerate(preference)}
+
+    compatible_free = []
+    for gate_id, gate_type in GATE_CONFIG:
+        if not gate_fits(gate_type, size):
+            continue
+        if gate_free[gate_id] > arrival_min:
+            continue
+        compatible_free.append(gate_id)
+
+    return sorted(
+        compatible_free,
+        key=lambda gate_id: (
+            gate_usage[gate_id],
+            preference_rank.get(gate_id, len(preference)),
+            gate_id,
+        ),
+    )
 
 
 def minutes_since_midnight(value: datetime) -> int:
@@ -157,11 +185,16 @@ def build_turns_for_day(instances: list[dict], service_date: date, turnaround_mi
     turns.sort(key=lambda row: row["turnaround_minutes"])
 
     gate_free = {gate_id: 0 for gate_id, _ in GATE_CONFIG}
+    gate_usage = {gate_id: 0 for gate_id, _ in GATE_CONFIG}
     for turn in turns:
         assigned = False
-        for gate_id, gate_type in GATE_CONFIG:
-            if gate_fits(gate_type, turn["size"]) and gate_free[gate_id] <= turn["arr_min"]:
+        # Spread assignments across all compatible open gates instead of always
+        # packing the first gate in the list. That produces a fuller, more realistic
+        # gate map while still respecting overlap constraints.
+        for gate_id in candidate_gates_for_turn(turn["size"], gate_free, gate_usage, turn["arr_min"]):
+            if gate_free[gate_id] <= turn["arr_min"]:
                 gate_free[gate_id] = turn["dep_min"]
+                gate_usage[gate_id] += 1
                 turn["gate_id"] = gate_id
                 turn["conflict"] = False
                 assigned = True
