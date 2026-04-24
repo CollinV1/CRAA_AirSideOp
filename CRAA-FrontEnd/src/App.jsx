@@ -49,8 +49,8 @@ function App() {
   const [uploadSubtitle, setUploadSubtitle] = useState("Supported format: CSV");
 
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
-  const [analyticsStatus, setAnalyticsStatus] = useState("Sample analytics view loaded.");
-  const [sampleScheduleBuild, setSampleScheduleBuild] = useState("Not built yet");
+  const [analyticsStatus, setAnalyticsStatus] = useState("Analytics view loaded.");
+  const [latestScheduleBuild, setLatestScheduleBuild] = useState("Not built yet");
   const [analyticsWindowValue, setAnalyticsWindowValue] = useState("1 day");
   const [analyticsUtilizationValue, setAnalyticsUtilizationValue] = useState("--");
   const [analyticsUtilizationDetail, setAnalyticsUtilizationDetail] = useState("Waiting for latest schedule data");
@@ -139,16 +139,17 @@ function App() {
       nextColors[gate.id] = "rgba(0, 200, 0, 0.4)";
     });
 
-    rows.forEach((row) => {
-      if (row.service_date !== selectedDate) return;
-      if (!row.scheduled_at_gate) return;
+    const activeRows = rows
+      .filter((row) => row.service_date === selectedDate && row.scheduled_at_gate)
+      .filter((row) => {
+        const arrival = getTimePart(row.arrival_time);
+        const departure = getTimePart(row.departure_time);
+        return selectedTime >= arrival && selectedTime <= departure;
+      })
+      .slice(0, 10);
 
-      const arrival = getTimePart(row.arrival_time);
-      const departure = getTimePart(row.departure_time);
-
-      if (selectedTime >= arrival && selectedTime <= departure) {
-        nextColors[row.gate_id] = "rgba(255, 0, 0, 0.4)";
-      }
+    activeRows.forEach((row) => {
+      nextColors[row.gate_id] = "rgba(255, 0, 0, 0.4)";
     });
 
     setGateColors(nextColors);
@@ -196,7 +197,7 @@ function App() {
 
       setUploadedNormalized(true);
       setUploadSubtitle("Upload complete. Ready to build a schedule.");
-      setSampleScheduleBuild("Raw and normalized tables refreshed");
+      setLatestScheduleBuild("Raw and normalized tables refreshed");
     } catch (error) {
       console.error(error);
       setUploadSubtitle("Upload failed");
@@ -247,7 +248,7 @@ function App() {
       setBuildStatus(
         `Schedule ready for ${buildStartDate}${buildStartDate === buildEndDate ? "" : ` to ${buildEndDate}`}. Download: ${API_BASE}${result.download_url}`
       );
-      setSampleScheduleBuild(buildStartDate === buildEndDate ? buildStartDate : `${buildStartDate} to ${buildEndDate}`);      
+      setLatestScheduleBuild(buildStartDate === buildEndDate ? buildStartDate : `${buildStartDate} to ${buildEndDate}`);      
       setAnalyticsWindowValue(buildStartDate === buildEndDate ? buildStartDate : `${buildStartDate} → ${buildEndDate}`);
       await loadAnalyticsSummary();
       await loadGateStatusForSelectedTime();
@@ -343,7 +344,7 @@ function App() {
     } catch (error) {
       console.error("Power BI load failed:", error);
       setAnalyticsLoaded(false);
-      setAnalyticsStatus("Power BI analytics unavailable. Showing sample analytics view.");
+      setAnalyticsStatus("Power BI analytics unavailable.");
     }
   }
 
@@ -563,7 +564,7 @@ function App() {
           <div className="analytics-header">
             <div>
               <div className="analytics-title">Operations Analytics</div>
-              <div className="analytics-copy">sample analytics</div>
+              <div className="analytics-copy">Operations report</div>
             </div>
             <div className="analytics-status">{analyticsStatus}</div>
           </div>
@@ -572,7 +573,7 @@ function App() {
             <div className="stat-card">
               <div className="stat-label">Schedule Window</div>
               <div className="stat-value">{analyticsWindowValue}</div>
-              <div className="stat-detail">Current sample reporting period</div>
+              <div className="stat-detail">Current reporting period</div>
             </div>
 
             <div className="stat-card">
@@ -596,14 +597,14 @@ function App() {
 
           <div className="analytics-panel">
             {!analyticsLoaded && (
-              <div className="analytics-sample">
-                <h3>Sample Power BI</h3>
-                <p>Insert embedded dashboard here.</p>
+              <div className="analytics-fallback">
+                <h3>Power BI</h3>
+                <p>Power BI dashboard will appear here when available.</p>
 
                 <div className="analytics-list">
                   <div className="analytics-list-item">
                     <span>Latest schedule.</span>
-                    <strong>{sampleScheduleBuild}</strong>
+                    <strong>{latestScheduleBuild}</strong>
                   </div>
 
                   <div className="analytics-list-item">
