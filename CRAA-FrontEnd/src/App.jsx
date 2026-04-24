@@ -3,8 +3,10 @@ import "./App.css";
 import airportMap from "./assets/UpScaled.png";
 import chsLogo from "./assets/CHS.png"; 
 
+// Local FastAPI backend URL.
 const API_BASE = "http://127.0.0.1:8000";
 
+// Gate marker positions on the airport map SVG.
 const GATES = [
   { id: "B1", cx: 546, cy: 401, rx: 35, ry: 27.5, transform: "rotate(-27)" },
   { id: "B3", cx: 513, cy: 318, rx: 35, ry: 27.5, transform: "rotate(-27)" },
@@ -66,12 +68,15 @@ function App() {
   const fileInputRef = useRef(null);
   const powerbiContainerRef = useRef(null);
 
+  // Keeps the selected day valid when the month/year changes.
   const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
 
+  // Pulls HH:MM:SS from an ISO datetime string.
   function getTimePart(isoString) {
     return isoString.slice(11, 19);
   }
 
+  // Converts time into seconds so playback can advance easily.
   function timeToSeconds(hhmmss) {
     const [h, m, s] = hhmmss.split(":").map(Number);
     return h * 3600 + m * 60 + s;
@@ -84,6 +89,7 @@ function App() {
     return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
   }
 
+  // Formats playback time for the header display.
   function formatPlaybackDisplay(hhmmss) {
     let [hours, minutes] = hhmmss.split(":").map(Number);
     const suffix = hours >= 12 ? "PM" : "AM";
@@ -96,6 +102,7 @@ function App() {
     return new Date(year, month, day).toISOString().slice(0, 10);
   }
 
+  // Initializes date fields from the selected calendar values.
   useEffect(() => {
     const nextSelectedDate = getSelectedDateIso();
     setPlaybackDate((prev) => prev || nextSelectedDate);
@@ -103,12 +110,14 @@ function App() {
     setBuildEndDate((prev) => prev || nextSelectedDate);
   }, [year, month, day]);
 
+  // Prevents invalid dates like February 31.
   useEffect(() => {
     if (day > daysInMonth) {
       setDay(daysInMonth);
     }
   }, [daysInMonth, day]);
 
+  // Prints clicked SVG coordinates when Enter is pressed.
   useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === "Enter") {
@@ -120,6 +129,7 @@ function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [clickedPoints]);
 
+  // Loads schedule rows and colors gates based on the selected time.
   async function loadGateStatusForSelectedTime(playbackTime = null) {
     const response = await fetch(`${API_BASE}/powerbi/optimized-schedule`);
     if (!response.ok) {
@@ -134,11 +144,13 @@ function App() {
     const selectedDate = playbackDate;
     const selectedTime = playbackTime || (time.length === 5 ? `${time}:00` : time);
 
+    // Default all gates to available before marking occupied gates.
     const nextColors = {};
     GATES.forEach((gate) => {
       nextColors[gate.id] = "rgba(0, 200, 0, 0.4)";
     });
 
+    // Only show the first 10 active flights at the selected time.
     const activeRows = rows
       .filter((row) => row.service_date === selectedDate && row.scheduled_at_gate)
       .filter((row) => {
@@ -155,6 +167,7 @@ function App() {
     setGateColors(nextColors);
   }
 
+  // Validates and uploads a CSV to the backend pipeline.
   async function handleCSVFile(file) {
     if (!file) return;
 
@@ -206,6 +219,7 @@ function App() {
     }
   }
 
+  // Requests the backend to build a schedule for the chosen date range.
   async function buildScheduleForSelectedDay() {
     if (!uploadedNormalized) {
       setBuildStatus("Upload a CSV first.");
@@ -259,6 +273,7 @@ function App() {
     }
   }
 
+  // Loads summary numbers for the analytics cards.
   async function loadAnalyticsSummary() {
     try {
       const response = await fetch(`${API_BASE}/powerbi/optimized-schedule`);
@@ -299,6 +314,7 @@ function App() {
     }
   }
 
+  // Embeds the Power BI report when credentials are available.
   async function loadPowerBIAnalytics() {
     setAnalyticsStatus("Loading Power BI analytics...");
 
@@ -348,6 +364,7 @@ function App() {
     }
   }
 
+  // Switches to analytics and refreshes the report data.
   async function handleAnalyticsViewClick() {
     setActiveView("analytics");
     await loadAnalyticsSummary();
@@ -356,6 +373,7 @@ function App() {
     }
   }
 
+  // Starts playback at the first scheduled flight time for the selected date.
   function startTimelinePlayback() {
     const rowsForDate = scheduleRows.filter(
       (row) => row.service_date === playbackDate && row.scheduled_at_gate
@@ -380,10 +398,12 @@ function App() {
     setActiveView("map");
   }
 
+  // Pauses the timeline without clearing the current time.
   function stopTimelinePlayback() {
     setIsPlayingTimeline(false);
   }
 
+  // Advances playback by 30 minutes every second.
   useEffect(() => {
     if (!isPlayingTimeline || !currentPlaybackTime || !timelineBounds) return;
 
@@ -404,6 +424,7 @@ function App() {
     return () => clearInterval(interval);
   }, [isPlayingTimeline, currentPlaybackTime, timelineBounds]);
 
+  // Recolors gates whenever playback time changes.
   useEffect(() => {
     if (!currentPlaybackTime || !scheduleRows.length) return;
 
@@ -412,6 +433,7 @@ function App() {
     });
   }, [currentPlaybackTime, scheduleRows.length, playbackDate]);
 
+  // Converts map clicks into SVG coordinates for gate placement.
   function handleSvgClick(e) {
     const svg = e.currentTarget;
     const rect = svg.getBoundingClientRect();
@@ -499,6 +521,7 @@ function App() {
                 handleCSVFile(file);
               }}
             >
+              {/* Hidden input is triggered by clicking the drop zone. */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -548,6 +571,7 @@ function App() {
 
             <div className="build-status">{buildStatus}</div>
 
+            {/* Shows the download link only after the backend creates a file. */}
             {buildStatus.includes("http://127.0.0.1:8000") && (
               <div className="build-status">
                 <a
@@ -596,6 +620,7 @@ function App() {
           </div>
 
           <div className="analytics-panel">
+            {/* Fallback content shown if Power BI does not load. */}
             {!analyticsLoaded && (
               <div className="analytics-fallback">
                 <h3>Power BI</h3>
@@ -634,6 +659,7 @@ function App() {
             preserveAspectRatio="xMidYMid meet"
             onClick={handleSvgClick}
           >
+            {/* Draw one clickable overlay region for each gate. */}
             {GATES.map((gate) => (
               <ellipse
                 key={gate.id}
